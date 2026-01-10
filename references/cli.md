@@ -60,12 +60,19 @@ bns projects create --name "My Project" --organization <ORG_ID>
 bns environments list --project <PROJECT_ID>
 bns environments show --id <ENV_ID>
 
-# Create
-bns environments create-from-template \
-  --template <TEMPLATE_ID> \
+# Create from template
+bns environments create \
+  --from-template <TEMPLATE_ID> \
   --name "My Env" \
   --project <PROJECT_ID> \
-  --k8s-integration <CLUSTER_ID>
+  --k8s <CLUSTER_ID>
+
+# Create from local file
+bns environments create \
+  --from-path bunnyshell.yaml \
+  --name "My Env" \
+  --project <PROJECT_ID> \
+  --k8s <CLUSTER_ID>
 
 # Clone
 bns environments clone --id <ENV_ID> --name "Cloned Env"
@@ -76,18 +83,16 @@ bns environments stop --id <ENV_ID> --wait
 bns environments start --id <ENV_ID> --wait
 bns environments delete --id <ENV_ID> --force
 
-# Configuration
-bns environments export-configuration --id <ENV_ID> > bunnyshell.yaml
-bns environments update-configuration --id <ENV_ID> < bunnyshell.yaml
-
-# Variables
-bns environments show-variables --id <ENV_ID>
-bns environments set-variable --id <ENV_ID> --name KEY --value VALUE
+# Configuration (export/import)
+bns environments definition --id <ENV_ID> > bunnyshell.yaml
+bns environments update-configuration --id <ENV_ID> --from-path bunnyshell.yaml
 
 # Settings
-bns environments update --id <ENV_ID> --auto-deploy true
-bns environments update --id <ENV_ID> --auto-stop true --auto-stop-hours 8
+bns environments update-settings --id <ENV_ID> --auto-deploy-ephemerals
+bns environments update-settings --id <ENV_ID> --termination-protection
 ```
+
+**Note:** Environment variables are managed via `bns variables` commands (see Variables section below).
 
 ## Components
 
@@ -96,23 +101,31 @@ bns environments update --id <ENV_ID> --auto-stop true --auto-stop-hours 8
 bns components list --environment <ENV_ID>
 bns components show --id <COMPONENT_ID>
 
-# Operations
-bns components redeploy --id <COMPONENT_ID>
-bns components delete --id <COMPONENT_ID>
+# Update component
+bns components update --id <COMPONENT_ID>
 
-# Logs & exec
-bns components logs --id <COMPONENT_ID>
-bns components exec --id <COMPONENT_ID> -- <COMMAND>
+# SSH into component
+bns components ssh --id <COMPONENT_ID>
+bns components ssh --id <COMPONENT_ID> --container <CONTAINER_NAME>
+
+# Port forwarding via component
+bns components port-forward --id <COMPONENT_ID> 8080:80
 ```
+
+**Note:** `bns components redeploy`, `delete`, `logs`, and `exec` do not exist. Use:
+- For redeployment: `bns environments deploy` or redeploy via web UI
+- For logs/exec: Use `kubectl` with the environment's namespace (see SKILL.md for details)
 
 ## Pipelines
 
 ```bash
 bns pipeline list --environment <ENV_ID>
 bns pipeline show --id <PIPELINE_ID>
-bns pipeline logs --id <PIPELINE_ID> --follow
-bns pipeline cancel --id <PIPELINE_ID>
+bns pipeline monitor --id <PIPELINE_ID>              # Watch progress until completion
+bns pipeline monitor --id <PIPELINE_ID> --interval 5s  # Custom check interval
 ```
+
+**Note:** `bns pipeline logs` and `bns pipeline cancel` do not exist. Use `monitor` to follow progress or the web UI to cancel.
 
 ## Kubernetes Clusters
 
@@ -126,8 +139,10 @@ bns k8s-clusters show --id <CLUSTER_ID>
 ```bash
 # Environment variables
 bns variables list --environment <ENV_ID>
+bns variables show --id <VAR_ID>
 bns variables create --environment <ENV_ID> --name KEY --value VALUE
-bns variables update --id <VAR_ID> --value NEW_VALUE
+bns variables edit --id <VAR_ID> --value NEW_VALUE
+bns variables edit --id <VAR_ID> --secret              # Mark as secret
 bns variables delete --id <VAR_ID>
 
 # Import from file
@@ -136,14 +151,19 @@ bns variables import --secret-file=/path/to/secrets.env
 bns variables import --var-file=vars.env --secret-file=secrets.env --ignore-duplicates
 ```
 
+**Note:** Use `bns variables edit` (not `update`) to modify existing variables.
+
 ## Project Variables
 
 ```bash
 bns project-variables list --project <PROJECT_ID>
+bns project-variables show --id <VAR_ID>
 bns project-variables create --project <PROJECT_ID> --name KEY --value VALUE
-bns project-variables update --id <VAR_ID> --value NEW_VALUE
+bns project-variables edit --id <VAR_ID> --value NEW_VALUE
 bns project-variables delete --id <VAR_ID>
 ```
+
+**Note:** Use `bns project-variables edit` (not `update`) to modify existing variables.
 
 ## Secrets
 
@@ -186,17 +206,19 @@ bns debug start --component <COMPONENT_ID>
 bns debug start --component <COMPONENT_ID> --shell /bin/bash
 bns debug start --component <COMPONENT_ID> --force-recreate-resource
 bns debug stop
-bns debug up    # Start SSH connection in debug
-bns debug down  # Revert pod to original state
 ```
+
+**Note:** `bns debug up` and `bns debug down` do not exist. Use `start`/`stop` instead.
 
 ## Remote Development
 
 ```bash
-bns remote-development start --component <COMPONENT_ID>
-bns remote-development stop
-bns remote-development status
+bns remote-development up --component <COMPONENT_ID>
+bns remote-development down
+bns remote-development config   # Manage remote development config
 ```
+
+**Note:** Commands are `up`/`down` (not `start`/`stop`). `status` does not exist.
 
 ## Git Operations
 

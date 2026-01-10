@@ -34,11 +34,11 @@ bns environments list --project <PROJECT_ID>
 bns environments show --id <ENV_ID>
 
 # Create from template
-bns environments create-from-template \
-  --template <TEMPLATE_ID> \
+bns environments create \
+  --from-template <TEMPLATE_ID> \
   --name "My Env" \
   --project <PROJECT_ID> \
-  --k8s-integration <CLUSTER_ID>
+  --k8s <CLUSTER_ID>
 
 # Deploy environment (wait for completion)
 bns environments deploy --id <ENV_ID> --wait
@@ -165,12 +165,14 @@ bns ssh --component <COMPONENT_ID>
 # List pipelines
 bns pipeline list --environment <ENV_ID>
 
-# View logs (follow mode)
-bns pipeline logs --id <PIPELINE_ID> --follow
+# Show pipeline details
+bns pipeline show --id <PIPELINE_ID>
 
-# Cancel running pipeline
-bns pipeline cancel --id <PIPELINE_ID>
+# Monitor pipeline progress (waits until completion)
+bns pipeline monitor --id <PIPELINE_ID>
 ```
+
+**Note:** `bns pipeline logs` and `bns pipeline cancel` do not exist. Use `monitor` to follow progress or the web UI to cancel pipelines.
 
 ### 6. Remote Development
 
@@ -183,12 +185,16 @@ bns port-forward 5432 --component <COMPONENT_ID>          # Same local/remote
 bns port-forward 15432:5432 --component <COMPONENT_ID>    # Different local port
 bns port-forward :5432 --component <COMPONENT_ID>         # Random local port
 
-# Debug session
+# Debug session (modifies pod for debugging, then reverts)
 bns debug start --component <COMPONENT_ID>
 bns debug stop
-bns debug up    # Start SSH in debug mode
-bns debug down  # Revert pod to original state
+
+# Remote development (sync local code to container)
+bns remote-development up --component <COMPONENT_ID>
+bns remote-development down
 ```
+
+**Note:** `bns debug up`/`down` do not exist. Use `bns debug start`/`stop` instead.
 
 ### 7. Variables & Secrets
 
@@ -311,7 +317,7 @@ curl -X POST "https://api.environments.bunnyshell.com/v1/environments/ENV_ID/dep
 | Issue | Solution |
 |-------|----------|
 | Authentication failed | Run `bns configure profiles add` with valid token |
-| Environment stuck deploying | Check `bns pipeline logs --id <PIPELINE_ID>` |
+| Environment stuck deploying | Check `bns pipeline monitor --id <PIPELINE_ID>` or view in web UI |
 | Component not found in UI | Ensure Helm uses `--post-renderer /bns/helpers/helm/bns_post_renderer` |
 | Variables not injecting | Check variable scope (project > environment > component) |
 
