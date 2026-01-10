@@ -77,34 +77,89 @@ bns components list --environment <ENV_ID>
 # Show component details
 bns components show <COMPONENT_ID>
 
-# Execute command in container
-bns components exec <COMPONENT_ID> -- ls -la
-
-# SSH into component
+# SSH into component (interactive)
 bns ssh --component <COMPONENT_ID>
+
+# SSH with specific container (for multi-container pods)
+bns ssh --component <COMPONENT_ID> --container <CONTAINER_NAME>
 ```
 
-### 3. Viewing Component Logs
+**Note:** `bns components exec` does not exist. Use `bns ssh` for interactive access or `kubectl exec` for scripted command execution (see below).
+
+### 3. Executing Commands in Containers
+
+There are two main approaches to execute commands in component containers:
+
+#### Option A: Using `bns ssh` (Interactive)
+
+Best for interactive sessions. The CLI handles kubeconfig automatically.
+
+```bash
+# Interactive SSH session
+bns ssh --component <COMPONENT_ID>
+
+# With specific container (if pod has multiple containers)
+bns ssh --component <COMPONENT_ID> --container <CONTAINER_NAME>
+```
+
+#### Option B: Using `kubectl exec` (Scripted/Non-Interactive)
+
+Best for scripted command execution when you need to capture output. **Requires direct cluster access.**
+
+**Prerequisites for kubectl:**
+1. **kubectl installed**: The Kubernetes CLI must be available
+2. **Kubeconfig configured**: You need a valid kubeconfig with credentials for the cluster
+   - The kubeconfig is typically at `~/.kube/config` or set via `KUBECONFIG` env var
+   - Must have credentials for the Kubernetes cluster where the environment runs
+   - Bunnyshell environments run on clusters configured via "Kubernetes Integrations"
+3. **Network access**: Your machine must be able to reach the Kubernetes API server
+
+**Step-by-step workflow:**
+
+```bash
+# 1. Get the environment's namespace (format: env-<UNIQUE>)
+bns environments show --id <ENV_ID> --output json | jq -r '.namespace'
+# Example output: "7uyzlw" → namespace is "env-7uyzlw"
+
+# 2. List pods in the namespace
+kubectl get pods -n env-<NAMESPACE>
+
+# 3. Execute command in a specific pod/container
+kubectl exec -n env-<NAMESPACE> <POD_NAME> -c <CONTAINER_NAME> -- <COMMAND>
+
+# Example: Check Symfony version in dashboard-php
+kubectl exec -n env-7uyzlw dashboard-php-7bb5d69574-2k6jc -c dashboard-php -- php bin/console --version
+```
+
+**Finding the right pod and container names:**
+- Pod names typically follow the pattern: `<component-name>-<replicaset-hash>-<pod-hash>`
+- Container names often match the component name, but multi-container pods may differ
+- Use `kubectl describe pod <POD_NAME> -n env-<NAMESPACE>` to see all containers
+
+### 4. Viewing Component Logs
 
 **Note:** `bns components logs` does not exist. Use these alternatives:
 
 ```bash
-# Option 1: Via kubectl (requires cluster access)
+# Option 1: Via kubectl (requires cluster access - see prerequisites above)
 # First get the namespace from environment details
-bns environments show --id <ENV_ID>  # Look for "namespace" field (e.g., env-abc123)
+bns environments show --id <ENV_ID> --output json | jq -r '.namespace'
+# Namespace format is "env-<UNIQUE>" (e.g., if output is "7uyzlw", namespace is "env-7uyzlw")
 
-# Then use kubectl to get logs
-kubectl get pods -n env-<UNIQUE>
-kubectl logs -n env-<UNIQUE> <POD_NAME> --tail=200
+# List pods to find the one you need
+kubectl get pods -n env-<NAMESPACE>
 
-# Option 2: Execute tail inside the container
-bns components exec <COMPONENT_ID> -- tail -100 /var/log/app.log
+# Get logs from a specific pod/container
+kubectl logs -n env-<NAMESPACE> <POD_NAME> --tail=200
+kubectl logs -n env-<NAMESPACE> <POD_NAME> -c <CONTAINER_NAME> --tail=200  # specific container
+kubectl logs -n env-<NAMESPACE> <POD_NAME> -f  # follow/stream logs
 
-# Option 3: SSH and view logs interactively
+# Option 2: SSH and view logs interactively
 bns ssh --component <COMPONENT_ID>
+# Then run: tail -f /var/log/app.log (or wherever logs are stored)
 ```
 
-### 4. Pipeline Monitoring
+### 5. Pipeline Monitoring
 
 ```bash
 # List pipelines
@@ -117,7 +172,7 @@ bns pipeline logs --id <PIPELINE_ID> --follow
 bns pipeline cancel --id <PIPELINE_ID>
 ```
 
-### 5. Remote Development
+### 6. Remote Development
 
 ```bash
 # SSH into component
@@ -135,7 +190,7 @@ bns debug up    # Start SSH in debug mode
 bns debug down  # Revert pod to original state
 ```
 
-### 6. Variables & Secrets
+### 7. Variables & Secrets
 
 ```bash
 # Import variables
