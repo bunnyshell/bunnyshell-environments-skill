@@ -40,8 +40,11 @@ bns environments create-from-template \
   --project <PROJECT_ID> \
   --k8s-integration <CLUSTER_ID>
 
-# Deploy environment
+# Deploy environment (wait for completion)
 bns environments deploy --id <ENV_ID> --wait
+
+# Deploy environment (non-blocking)
+bns environments deploy --id <ENV_ID> --no-wait
 
 # Stop environment (scale down, preserve data)
 bns environments stop --id <ENV_ID> --wait
@@ -55,9 +58,14 @@ bns environments delete --id <ENV_ID>
 # Clone environment
 bns environments clone --id <ENV_ID> --name "Cloned Env"
 
-# Export/update configuration
-bns environments export-configuration --id <ENV_ID> > bunnyshell.yaml
-bns environments update-configuration --id <ENV_ID> < bunnyshell.yaml
+# Export configuration (get current YAML definition)
+bns environments definition --id <ENV_ID> > bunnyshell.yaml
+
+# Update configuration from local file
+bns environments update-configuration --id <ENV_ID> --from-path bunnyshell.yaml
+
+# Update configuration and deploy in one step
+bns environments update-configuration --id <ENV_ID> --from-path bunnyshell.yaml --deploy
 ```
 
 ### 2. Component Operations
@@ -67,19 +75,36 @@ bns environments update-configuration --id <ENV_ID> < bunnyshell.yaml
 bns components list --environment <ENV_ID>
 
 # Show component details
-bns components show --id <COMPONENT_ID>
-
-# View logs
-bns components logs --id <COMPONENT_ID>
+bns components show <COMPONENT_ID>
 
 # Execute command in container
-bns components exec --id <COMPONENT_ID> -- ls -la
+bns components exec <COMPONENT_ID> -- ls -la
 
-# Redeploy single component
-bns components redeploy --id <COMPONENT_ID>
+# SSH into component
+bns ssh --component <COMPONENT_ID>
 ```
 
-### 3. Pipeline Monitoring
+### 3. Viewing Component Logs
+
+**Note:** `bns components logs` does not exist. Use these alternatives:
+
+```bash
+# Option 1: Via kubectl (requires cluster access)
+# First get the namespace from environment details
+bns environments show --id <ENV_ID>  # Look for "namespace" field (e.g., env-abc123)
+
+# Then use kubectl to get logs
+kubectl get pods -n env-<UNIQUE>
+kubectl logs -n env-<UNIQUE> <POD_NAME> --tail=200
+
+# Option 2: Execute tail inside the container
+bns components exec <COMPONENT_ID> -- tail -100 /var/log/app.log
+
+# Option 3: SSH and view logs interactively
+bns ssh --component <COMPONENT_ID>
+```
+
+### 4. Pipeline Monitoring
 
 ```bash
 # List pipelines
@@ -92,7 +117,7 @@ bns pipeline logs --id <PIPELINE_ID> --follow
 bns pipeline cancel --id <PIPELINE_ID>
 ```
 
-### 4. Remote Development
+### 5. Remote Development
 
 ```bash
 # SSH into component
@@ -110,7 +135,7 @@ bns debug up    # Start SSH in debug mode
 bns debug down  # Revert pod to original state
 ```
 
-### 5. Variables & Secrets
+### 6. Variables & Secrets
 
 ```bash
 # Import variables
@@ -172,9 +197,48 @@ components:
 
 ## Output Format
 
-Use `--output json` or `--output yaml` for scripting:
+Use `--output json` or `--output yaml` for scripting.
+
+**Important:** JSON responses use `_embedded.item[]` structure, not a direct array:
+
 ```bash
-bns environments list --output json | jq '.[] | .id'
+# Correct way to parse environment list
+bns environments list --output json | jq '._embedded.item[] | {id, name}'
+
+# Correct way to parse component list
+bns components list --environment <ENV_ID> --output json | jq '._embedded.item[] | {id, name}'
+
+# Get just the IDs
+bns environments list --output json | jq -r '._embedded.item[].id'
+```
+
+## Clone and Customize Workflow
+
+Complete workflow for cloning an environment and customizing it:
+
+```bash
+# 1. Clone the source environment
+bns environments clone --id <SOURCE_ENV_ID> --name "new-environment"
+# Note the new environment ID from the output
+
+# 2. Export the new environment's configuration
+bns environments definition --id <NEW_ENV_ID> > new-env.yaml
+
+# 3. Edit new-env.yaml to customize:
+#    - Update environment variables
+#    - Change git branches
+#    - Modify resource settings
+#    - etc.
+
+# 4. Apply the updated configuration
+bns environments update-configuration --id <NEW_ENV_ID> --from-path new-env.yaml
+
+# 5. Deploy the environment
+bns environments deploy --id <NEW_ENV_ID> --no-wait
+
+# 6. Monitor the deployment
+bns pipeline list --environment <NEW_ENV_ID>
+bns environments show --id <NEW_ENV_ID>
 ```
 
 ## REST API
