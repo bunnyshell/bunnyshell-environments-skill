@@ -270,6 +270,40 @@ components:
 {{ components.NAME.exported.VAR }}  # Exported variable from Helm/Terraform
 ```
 
+### Custom Domains with SSL
+
+For custom domains, set `selfManagedDns: true` on the host. Use ExternalDNS or manage DNS manually.
+
+**With cert-manager (recommended for auto SSL):**
+
+```yaml
+hosts:
+  - hostname: 'api.example.com'
+    path: /
+    servicePort: 8080
+    selfManagedDns: true
+    k8s:
+      ingress:
+        tlsSecretName: ''
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-prod
+```
+
+**With existing TLS certificate (K8s secret):**
+
+```yaml
+hosts:
+  - hostname: 'api.example.com'
+    path: /
+    servicePort: 8080
+    selfManagedDns: true
+    k8s:
+      ingress:
+        tlsSecretName: my-tls-secret
+```
+
+See [references/yaml-schema.md](references/yaml-schema.md) for full custom domain documentation.
+
 ## Output Format
 
 Use `--output json` or `--output yaml` for scripting.

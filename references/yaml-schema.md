@@ -25,10 +25,10 @@ components: []              # Required: list of components
 
 volumes: []                 # Optional: persistent volumes
 
-security:                   # Optional: IP restrictions
+security:                   # Optional: environment-wide IP restrictions
   access:
     allowedIps:
-      - '192.168.0.0/24'
+      - '192.168.0.0/24'    # All hosts restricted unless public: true
 
 dev: {}                     # Optional: remote development config
 ```
@@ -55,13 +55,13 @@ components:
         servicePort: 8080
         public: false     # Bypass allowedIps restriction
         externalAddress: string    # CNAME target
-        selfManagedDns: false      # Use external DNS
+        selfManagedDns: false      # Required: true when using custom domains
         displayPaths: []           # Override displayed URLs
         k8s:
           ingress:
             className: bns-nginx
-            tlsSecretName: string
-            annotations: {}
+            tlsSecretName: string  # K8s secret with TLS cert, or '' for cert-manager auto
+            annotations: {}        # e.g. cert-manager.io/cluster-issuer: letsencrypt-prod
 ```
 
 ## Docker Compose Components
@@ -326,6 +326,90 @@ volumes:
     size: 10Gi
     type: disk
 ```
+
+## Custom Domains and SSL
+
+### Custom Domain with ExternalDNS
+
+Use `selfManagedDns: true` when using your own domain. Bunnyshell will not create DNS records - use ExternalDNS or manage DNS manually.
+
+```yaml
+hosts:
+  - hostname: 'api.example.com'
+    path: /
+    servicePort: 8080
+    selfManagedDns: true
+```
+
+### SSL with Existing Certificate
+
+Reference a Kubernetes secret containing your TLS certificate:
+
+```yaml
+hosts:
+  - hostname: 'api.example.com'
+    path: /
+    servicePort: 8080
+    selfManagedDns: true
+    k8s:
+      ingress:
+        tlsSecretName: my-custom-domain-cert
+```
+
+### SSL with cert-manager (Auto-Generated Certificates)
+
+Use cert-manager to automatically provision and renew certificates. Set `tlsSecretName` to empty string and add the cluster-issuer annotation:
+
+```yaml
+hosts:
+  - hostname: 'api.example.com'
+    path: /
+    servicePort: 8080
+    selfManagedDns: true
+    k8s:
+      ingress:
+        tlsSecretName: ''
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-prod
+```
+
+**Prerequisites:** Cluster must have cert-manager installed with a ClusterIssuer named `letsencrypt-prod` (or your issuer name).
+
+**Note:** Let's Encrypt has rate limits. For ephemeral environments, use a wildcard certificate (`*.example.com`) with DNS challenge instead of per-environment certificates.
+
+### IP Restrictions
+
+**Option 1: Environment-wide restriction**
+
+Restricts all hosts unless `public: true` is set on the host:
+
+```yaml
+security:
+  access:
+    allowedIps:
+      - '192.168.0.0/24'
+      - '10.0.0.1/32'
+```
+
+**Option 2: Per-host restriction (nginx annotation)**
+
+Restricts access to a specific host only:
+
+```yaml
+hosts:
+  - hostname: 'admin.example.com'
+    path: /
+    servicePort: 8080
+    selfManagedDns: true
+    k8s:
+      ingress:
+        tlsSecretName: ''
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-prod
+          nginx.ingress.kubernetes.io/whitelist-source-range: '192.168.1.0/24,10.0.0.1/32'
+```
+
+Use comma-separated CIDR ranges for multiple IPs.
 
 ## Remote Development Config
 
