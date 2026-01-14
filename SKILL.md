@@ -77,34 +77,48 @@ bns components list --environment <ENV_ID>
 # Show component details
 bns components show <COMPONENT_ID>
 
-# SSH into component (interactive)
+# Interactive shell session (execs /bin/sh in the container)
 bns ssh --component <COMPONENT_ID>
 
-# SSH with specific container (for multi-container pods)
+# With specific container (for multi-container pods)
 bns ssh --component <COMPONENT_ID> --container <CONTAINER_NAME>
+
+# Execute commands non-interactively (preferred for scripting)
+bns ssh --component <COMPONENT_ID> --no-banner --non-interactive --shell "whoami; pwd; ls -lah"
 ```
 
-**Note:** `bns components exec` does not exist. Use `bns ssh` for interactive access or `kubectl exec` for scripted command execution (see below).
+**Note:** `bns ssh` is not real SSH - it executes `/bin/sh` in the container. Use the `--shell` flag to pass commands for non-interactive execution. `bns components exec` does not exist.
 
 ### 3. Executing Commands in Containers
 
 There are two main approaches to execute commands in component containers:
 
-#### Option A: Using `bns ssh` (Interactive)
+#### Option A: Using `bns ssh` (Recommended)
 
-Best for interactive sessions. The CLI handles kubeconfig automatically.
+The `bns ssh` command executes `/bin/sh` in the container (not real SSH). It handles kubeconfig automatically.
 
 ```bash
-# Interactive SSH session
+# Interactive shell session
 bns ssh --component <COMPONENT_ID>
 
 # With specific container (if pod has multiple containers)
 bns ssh --component <COMPONENT_ID> --container <CONTAINER_NAME>
+
+# Non-interactive command execution (best for scripting)
+bns ssh --component <COMPONENT_ID> --no-banner --non-interactive --shell "whoami"
+bns ssh --component <COMPONENT_ID> --no-banner --non-interactive --shell "php bin/console --version"
+bns ssh --component <COMPONENT_ID> --no-banner --non-interactive --shell "cat /etc/hosts; pwd; ls -la"
 ```
 
-#### Option B: Using `kubectl exec` (Scripted/Non-Interactive)
+**Flags for non-interactive use:**
 
-Best for scripted command execution when you need to capture output. **Requires direct cluster access.**
+- `--no-banner` - Suppresses the welcome banner
+- `--non-interactive` - Disables interactive prompts
+- `--shell "<commands>"` - Commands to execute (semicolon-separated for multiple)
+
+#### Option B: Using `kubectl exec` (Direct Cluster Access)
+
+Alternative when you have direct cluster access and kubeconfig configured. **Requires cluster credentials.**
 
 **Prerequisites for kubectl:**
 1. **kubectl installed**: The Kubernetes CLI must be available
@@ -177,7 +191,7 @@ bns pipeline monitor --id <PIPELINE_ID>
 ### 6. Remote Development
 
 ```bash
-# SSH into component
+# Shell into component (execs /bin/sh, not real SSH)
 bns ssh --component <COMPONENT_ID>
 
 # Port forwarding
