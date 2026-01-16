@@ -1,5 +1,5 @@
 ---
-name: bunnyshell environments
+name: bunnyshell-environments
 description: Manage Bunnyshell environments platform (environments.bunnyshell.com). Use this skill when the user asks to create, configure, deploy, stop, start, or delete environments in Bunnyshell. Also use for component management, port forwarding, remote development, SSH access, pipeline monitoring, and authoring bunnyshell.yaml configuration files. Triggers include mentions of Bunnyshell, bns CLI, environment deployment, ephemeral environments, or bunnyshell.yaml.
 ---
 
