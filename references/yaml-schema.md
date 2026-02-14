@@ -29,6 +29,7 @@ security:                   # Optional: environment-wide IP restrictions
   access:
     allowedIps:
       - '192.168.0.0/24'    # All hosts restricted unless public: true
+    realIpTrustedProxies: null  # Optional: trusted proxy CIDRs for real IP detection
 
 dev: {}                     # Optional: remote development config
 ```
@@ -153,6 +154,118 @@ components:
       - from: sidecar-name
         name: custom-sidecar
 ```
+
+#### shared_paths.initial_contents
+
+Controls which container's files populate the shared path on startup:
+
+| Value | Meaning | Use When |
+|-------|---------|----------|
+| `@self` | Copy from the sidecar/init container | Sidecar owns the files (e.g., config injector) |
+| `@target` | Copy from the parent container | Parent owns the files (e.g., app builds assets, sidecar serves them) |
+
+#### Sidecar Port Exposure
+
+**Important:** When a sidecar exposes a port (e.g., nginx on 8080), the parent Application component must also declare that port in its `ports` list, since they share the same pod network:
+
+```yaml
+- kind: Application
+  name: app
+  dockerCompose:
+    ports:
+      - '9000:9000'    # app's own port
+      - '8080:8080'    # sidecar's port — must be declared here too
+  pod:
+    sidecar_containers:
+      - from: nginx
+        name: nginx
+  hosts:
+    - hostname: 'app-{{ env.base_domain }}'
+      path: /
+      servicePort: 8080  # routes to the sidecar's port
+```
+
+### PHP-FPM + Nginx Sidecar (Complete Example)
+
+The most common pattern for Laravel/Symfony/PHP applications. Nginx and PHP-FPM run in the same pod, sharing the application directory.
+
+```yaml
+components:
+  - kind: Database
+    name: mysql
+    dockerCompose:
+      image: 'mysql:8.0'
+      environment:
+        MYSQL_ROOT_PASSWORD: '{{ env.varGroups.mysql.DB_PASSWORD }}'
+        MYSQL_DATABASE: '{{ env.varGroups.mysql.MYSQL_DATABASE }}'
+      ports:
+        - '3306:3306'
+    volumes:
+      - name: mysql-data
+        mount: /var/lib/mysql
+        subPath: ''
+
+  - kind: SidecarContainer
+    name: nginx
+    gitRepo: 'https://github.com/org/repo.git'
+    gitBranch: main
+    gitApplicationPath: docker/nginx
+    dockerCompose:
+      build:
+        context: docker/nginx
+      ports:
+        - '8080:8080'
+
+  - kind: Application
+    name: app
+    gitRepo: 'https://github.com/org/repo.git'
+    gitBranch: main
+    gitApplicationPath: /
+    dockerCompose:
+      build:
+        context: .
+        dockerfile: Dockerfile
+      environment:
+        APP_URL: '{{ env.varGroups.app.APP_URL }}'
+        DB_HOST: mysql
+        DB_DATABASE: '{{ env.varGroups.mysql.MYSQL_DATABASE }}'
+        DB_PASSWORD: '{{ env.varGroups.mysql.DB_PASSWORD }}'
+      ports:
+        - '9000:9000'   # PHP-FPM
+        - '8080:8080'   # Nginx sidecar port
+    pod:
+      sidecar_containers:
+        - from: nginx
+          name: nginx
+          shared_paths:
+            - path: /app
+              target:
+                path: /app
+                container: '@parent'
+              initial_contents: '@target'  # Copy built assets FROM app TO nginx
+    dependsOn:
+      - mysql
+    hosts:
+      - hostname: 'app-{{ env.base_domain }}'
+        path: /
+        servicePort: 8080
+```
+
+**Nginx sidecar config** must point to `localhost:9000` (same pod), not the service name:
+
+```nginx
+upstream php {
+    server localhost:9000;
+}
+```
+
+**Framework gotcha:** PHP frameworks behind a Kubernetes ingress (which terminates TLS) will see requests as HTTP. This causes asset URLs to use `http://` instead of `https://`, resulting in mixed-content errors and blank pages. Fix per framework:
+
+| Framework | Fix |
+|-----------|-----|
+| Laravel | `$middleware->trustProxies(at: '*')` in `bootstrap/app.php` |
+| Symfony | `framework.trusted_proxies: 'REMOTE_ADDR'` in config |
+| Generic PHP | Check `X-Forwarded-Proto` header |
 
 ## Helm Component
 
@@ -327,6 +440,11 @@ volumes:
     type: disk
 ```
 
+| Type | Backing | Access Mode | Use When |
+|------|---------|-------------|----------|
+| `disk` | Block storage (EBS, PD) | ReadWriteOnce | Default; single-pod workloads (databases) |
+| `network` | Network filesystem (EFS, Filestore) | ReadWriteMany | Multiple pods need the same volume, or pod rescheduling across nodes |
+
 ## Custom Domains and SSL
 
 ### Custom Domain with ExternalDNS
@@ -376,6 +494,33 @@ hosts:
 **Prerequisites:** Cluster must have cert-manager installed with a ClusterIssuer named `letsencrypt-prod` (or your issuer name).
 
 **Note:** Let's Encrypt has rate limits. For ephemeral environments, use a wildcard certificate (`*.example.com`) with DNS challenge instead of per-environment certificates.
+
+### SSL with cert-manager + Named TLS Secret
+
+When you want cert-manager to store the certificate in a specific named secret:
+
+```yaml
+hosts:
+  - hostname: 'app-{{ env.vars.BASE_DOMAIN }}'
+    path: /
+    servicePort: 8080
+    selfManagedDns: true
+    k8s:
+      ingress:
+        tlsSecretName: tls-secret
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-prod
+          nginx.ingress.kubernetes.io/proxy-body-size: 50m  # increase for file uploads
+```
+
+### Common Ingress Annotations
+
+| Annotation | Purpose | Default |
+|-----------|---------|---------|
+| `cert-manager.io/cluster-issuer` | Auto-provision TLS certificate | — |
+| `nginx.ingress.kubernetes.io/proxy-body-size` | Max upload size | `1m` |
+| `nginx.ingress.kubernetes.io/proxy-read-timeout` | Backend read timeout | `60` |
+| `nginx.ingress.kubernetes.io/whitelist-source-range` | IP allowlist (CIDR) | — |
 
 ### IP Restrictions
 

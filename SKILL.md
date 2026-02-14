@@ -240,8 +240,12 @@ name: my-environment
 type: primary  # or ephemeral
 
 environmentVariables:
-  API_KEY: SECRET["my-secret"]
-  BASE_URL: 'https://api-{{ env.base_domain }}'
+  BASE_DOMAIN: my-app.example.com   # Custom domain (or use {{ env.base_domain }} for auto)
+
+environmentVariablesGroups:
+  app:
+    APP_KEY: SECRET["my-secret"]
+    APP_URL: 'https://{{ env.vars.BASE_DOMAIN }}'
 
 components:
   - kind: Application
@@ -253,11 +257,22 @@ components:
       build:
         context: .
         dockerfile: Dockerfile
+      environment:
+        APP_KEY: '{{ env.varGroups.app.APP_KEY }}'
+        APP_URL: '{{ env.varGroups.app.APP_URL }}'
     hosts:
-      - hostname: 'api-{{ env.base_domain }}'
+      - hostname: 'api-{{ env.vars.BASE_DOMAIN }}'
         path: /
         servicePort: 8080
+        selfManagedDns: true
+        k8s:
+          ingress:
+            tlsSecretName: tls-secret
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-prod
 ```
+
+For a complete PHP-FPM + Nginx sidecar example, see [references/yaml-schema.md](references/yaml-schema.md#php-fpm--nginx-sidecar-complete-example).
 
 ### Key Interpolation Patterns
 
@@ -368,6 +383,21 @@ curl -X POST "https://api.environments.bunnyshell.com/v1/environments/ENV_ID/dep
 | Environment stuck deploying | Check `bns pipeline monitor --id <PIPELINE_ID>` or view in web UI |
 | Component not found in UI | Ensure Helm uses `--post-renderer /bns/helpers/helm/bns_post_renderer` |
 | Variables not injecting | Check variable scope (project > environment > component) |
+| Blank page / mixed content errors | TLS terminates at ingress; app sees HTTP. Configure the framework to trust proxies (see below) |
+| Sidecar port not reachable | Parent component must declare the sidecar's port in its own `ports` list |
+| File uploads rejected (413) | Add `nginx.ingress.kubernetes.io/proxy-body-size: 50m` annotation to hosts |
+
+### Framework Proxy/TLS Configuration
+
+Kubernetes ingress terminates TLS. The app receives plain HTTP and generates `http://` URLs, causing mixed-content blocks. Fix per framework:
+
+| Framework | Fix |
+|-----------|-----|
+| **Laravel** | `$middleware->trustProxies(at: '*')` in `bootstrap/app.php` |
+| **Symfony** | `framework.trusted_proxies: 'REMOTE_ADDR'` and `trusted_headers: ['x-forwarded-for', 'x-forwarded-proto']` |
+| **Django** | `SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')` |
+| **Express/Node** | `app.set('trust proxy', true)` |
+| **Rails** | Ensure `config.force_ssl = true` or use `ActionDispatch::RemoteIp` middleware |
 
 ## Reference Files
 

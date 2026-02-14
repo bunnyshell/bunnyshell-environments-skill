@@ -291,6 +291,50 @@ components:
 
 ## Common Patterns
 
+### Organize Variables by Service (Recommended)
+
+Use `environmentVariablesGroups` to group related variables by service. This keeps secrets and config co-located and avoids duplication:
+
+```yaml
+environmentVariablesGroups:
+  mysql:
+    DB_PASSWORD: SECRET['secret']
+    MYSQL_DATABASE: my_app_db
+    MYSQL_ROOT_PASSWORD: SECRET['rootpass']
+  app:
+    APP_KEY: SECRET['base64:...']
+    APP_URL: 'https://{{ env.vars.BASE_DOMAIN }}'
+    MONOLITH_BASE_URL: 'https://monolith.example.com'
+
+environmentVariables:
+  BASE_DOMAIN: my-app.example.com
+
+components:
+  - kind: Database
+    name: mysql
+    dockerCompose:
+      environment:
+        MYSQL_ROOT_PASSWORD: '{{ env.varGroups.mysql.DB_PASSWORD }}'
+        MYSQL_DATABASE: '{{ env.varGroups.mysql.MYSQL_DATABASE }}'
+
+  - kind: Application
+    name: app
+    dockerCompose:
+      environment:
+        APP_KEY: '{{ env.varGroups.app.APP_KEY }}'
+        APP_URL: '{{ env.varGroups.app.APP_URL }}'
+        DB_DATABASE: '{{ env.varGroups.mysql.MYSQL_DATABASE }}'
+        DB_PASSWORD: '{{ env.varGroups.mysql.DB_PASSWORD }}'
+    hosts:
+      - hostname: 'app-{{ env.vars.BASE_DOMAIN }}'
+```
+
+**Why this pattern works:**
+- Database credentials defined once in `mysql` group, referenced by both the database and app components
+- `BASE_DOMAIN` as a top-level env var makes it easy to change the domain in one place
+- `APP_URL` in the `app` group references `BASE_DOMAIN`, keeping URLs consistent
+- After saving, `SECRET[]` values become `ENCRYPTED[...]` in the stored definition
+
 ### Database Connection String
 
 ```yaml
