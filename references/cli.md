@@ -114,18 +114,35 @@ bns components port-forward --id <COMPONENT_ID> 8080:80
 
 **Note:** `bns components redeploy`, `delete`, `logs`, and `exec` do not exist. Use:
 - For redeployment: `bns environments deploy` or redeploy via web UI
-- For logs/exec: Use `kubectl` with the environment's namespace (see SKILL.md for details)
+- For logs: `bns logs --component <COMPONENT_ID>` (top-level command)
+- For exec: `bns ssh --component <COMPONENT_ID> --shell "command"` or `kubectl exec`
 
 ## Pipelines
 
 ```bash
+# List & show
 bns pipeline list --environment <ENV_ID>
 bns pipeline show --id <PIPELINE_ID>
-bns pipeline monitor --id <PIPELINE_ID>              # Watch progress until completion
+
+# List jobs in a pipeline
+bns pipeline jobs --id <PIPELINE_ID>
+
+# Monitor progress (waits until completion)
+bns pipeline monitor --id <PIPELINE_ID>
 bns pipeline monitor --id <PIPELINE_ID> --interval 5s  # Custom check interval
+
+# View logs (interactive job selection when --environment or --id used)
+bns pipeline logs --environment <ENV_ID>               # Pick from latest pipeline
+bns pipeline logs --id <PIPELINE_ID>                   # Pick from specific pipeline
+bns pipeline logs --job <JOB_ID>                       # Specific job directly
+bns pipeline logs --environment <ENV_ID> --failed      # Only failed jobs
+bns pipeline logs --environment <ENV_ID> -f            # Follow in real-time
+bns pipeline logs --job <JOB_ID> --step deploy         # Filter by step name
+bns pipeline logs --job <JOB_ID> --tail 50             # Last N lines per step
+bns pipeline logs --job <JOB_ID> -o json               # Output: stylish|json|yaml|raw
 ```
 
-**Note:** `bns pipeline logs` and `bns pipeline cancel` do not exist. Use `monitor` to follow progress or the web UI to cancel.
+**Note:** `bns pipeline cancel` does not exist. Use the web UI to cancel pipelines.
 
 ## Kubernetes Clusters
 
@@ -178,6 +195,43 @@ bns secrets encrypt-definition --file bunnyshell.yaml --organization <ORG_ID>
 bns secrets decrypt-definition --file bunnyshell.yaml --organization <ORG_ID>
 bns secrets decrypt-definition --file bunnyshell.yaml --resolved --organization <ORG_ID>
 ```
+
+## Logs (Runtime / Container)
+
+```bash
+# Single component
+bns logs --component <COMPONENT_ID>
+
+# All components in an environment
+bns logs --environment <ENV_ID>
+
+# Filter by component name (repeatable, requires --environment)
+bns logs --environment <ENV_ID> --name api --name worker
+
+# Follow / stream
+bns logs --component <COMPONENT_ID> -f
+
+# Last N lines
+bns logs --component <COMPONENT_ID> --tail 200
+
+# Time-based filtering
+bns logs --component <COMPONENT_ID> --since 5m
+bns logs --component <COMPONENT_ID> --since-time 2026-02-18T10:00:00Z
+
+# Specific container / all containers
+bns logs --component <COMPONENT_ID> -c <CONTAINER_NAME>
+bns logs --component <COMPONENT_ID> --all-containers
+
+# Include timestamps / previous container
+bns logs --component <COMPONENT_ID> --timestamps
+bns logs --component <COMPONENT_ID> --previous
+
+# Formatting
+bns logs --component <COMPONENT_ID> --no-color
+bns logs --component <COMPONENT_ID> --prefix=false
+```
+
+**Note:** `bns components logs` does not exist. Use the top-level `bns logs` command instead.
 
 ## SSH
 

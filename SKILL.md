@@ -150,30 +150,58 @@ kubectl exec -n env-7uyzlw dashboard-php-7bb5d69574-2k6jc -c dashboard-php -- ph
 - Container names often match the component name, but multi-container pods may differ
 - Use `kubectl describe pod <POD_NAME> -n env-<NAMESPACE>` to see all containers
 
-### 4. Viewing Component Logs
+### 4. Viewing Runtime / Container Logs
 
-**Note:** `bns components logs` does not exist. Use these alternatives:
+Use the top-level `bns logs` command (not `bns components logs`, which does not exist):
 
 ```bash
-# Option 1: Via kubectl (requires cluster access - see prerequisites above)
-# First get the namespace from environment details
-bns environments show --id <ENV_ID> --output json | jq -r '.namespace'
-# Namespace format is "env-<UNIQUE>" (e.g., if output is "7uyzlw", namespace is "env-7uyzlw")
+# Logs from a single component
+bns logs --component <COMPONENT_ID>
 
-# List pods to find the one you need
-kubectl get pods -n env-<NAMESPACE>
+# Stream all components in an environment
+bns logs --environment <ENV_ID>
 
-# Get logs from a specific pod/container
-kubectl logs -n env-<NAMESPACE> <POD_NAME> --tail=200
-kubectl logs -n env-<NAMESPACE> <POD_NAME> -c <CONTAINER_NAME> --tail=200  # specific container
-kubectl logs -n env-<NAMESPACE> <POD_NAME> -f  # follow/stream logs
+# Filter by component name (repeatable, requires --environment)
+bns logs --environment <ENV_ID> --name api --name worker
 
-# Option 2: SSH and view logs interactively
-bns ssh --component <COMPONENT_ID>
-# Then run: tail -f /var/log/app.log (or wherever logs are stored)
+# Follow / stream in real-time
+bns logs --component <COMPONENT_ID> -f
+
+# Last N lines
+bns logs --component <COMPONENT_ID> --tail 200
+
+# Time-based filtering
+bns logs --component <COMPONENT_ID> --since 5m       # last 5 minutes
+bns logs --component <COMPONENT_ID> --since-time 2026-02-18T10:00:00Z  # RFC3339
+
+# Specific container (multi-container pods)
+bns logs --component <COMPONENT_ID> -c <CONTAINER_NAME>
+
+# All containers in the pod
+bns logs --component <COMPONENT_ID> --all-containers
+
+# Include timestamps in output
+bns logs --component <COMPONENT_ID> --timestamps
+
+# Logs from previous terminated container
+bns logs --component <COMPONENT_ID> --previous
+
+# Disable color coding / source prefix
+bns logs --component <COMPONENT_ID> --no-color --prefix=false
 ```
 
-### 5. Pipeline Monitoring
+**Alternative: `kubectl logs`** (requires direct cluster access and kubeconfig):
+
+```bash
+# Get the namespace
+bns environments show --id <ENV_ID> --output json | jq -r '.namespace'
+# Namespace format: "env-<UNIQUE>"
+
+kubectl logs -n env-<NAMESPACE> <POD_NAME> --tail=200
+kubectl logs -n env-<NAMESPACE> <POD_NAME> -c <CONTAINER_NAME> -f
+```
+
+### 5. Pipeline Monitoring & Logs
 
 ```bash
 # List pipelines
@@ -182,11 +210,42 @@ bns pipeline list --environment <ENV_ID>
 # Show pipeline details
 bns pipeline show --id <PIPELINE_ID>
 
+# List jobs in a pipeline
+bns pipeline jobs --id <PIPELINE_ID>
+
 # Monitor pipeline progress (waits until completion)
 bns pipeline monitor --id <PIPELINE_ID>
 ```
 
-**Note:** `bns pipeline logs` and `bns pipeline cancel` do not exist. Use `monitor` to follow progress or the web UI to cancel pipelines.
+#### Pipeline Logs
+
+```bash
+# View logs for an environment (interactive job selection)
+bns pipeline logs --environment <ENV_ID>
+
+# View logs for a specific pipeline
+bns pipeline logs --id <PIPELINE_ID>
+
+# View logs for a specific job directly
+bns pipeline logs --job <JOB_ID>
+
+# Show only failed jobs
+bns pipeline logs --environment <ENV_ID> --failed
+
+# Follow logs in real-time
+bns pipeline logs --environment <ENV_ID> -f
+
+# Filter by step name
+bns pipeline logs --job <JOB_ID> --step deploy
+
+# Last N lines per step
+bns pipeline logs --job <JOB_ID> --tail 50
+
+# Output formats: stylish (default), json, yaml, raw
+bns pipeline logs --job <JOB_ID> -o json
+```
+
+**Note:** `bns pipeline cancel` does not exist. Use the web UI to cancel pipelines.
 
 ### 6. Remote Development
 
@@ -399,6 +458,13 @@ Kubernetes ingress terminates TLS. The app receives plain HTTP and generates `ht
 | **Express/Node** | `app.set('trust proxy', true)` |
 | **Rails** | Ensure `config.force_ssl = true` or use `ActionDispatch::RemoteIp` middleware |
 
+## Template Management
+
+When asked to update or create Bunnyshell templates:
+- See [references/template-update-playbook.md](references/template-update-playbook.md) for standard update process and best practices checklist
+- See [references/image-versions.md](references/image-versions.md) for recommended Docker image versions
+- See [references/troubleshooting.md](references/troubleshooting.md) for common issues and solutions
+
 ## Reference Files
 
 - [CLI Reference](references/cli.md) - Complete CLI command documentation
@@ -406,3 +472,6 @@ Kubernetes ingress terminates TLS. The app receives plain HTTP and generates `ht
 - [YAML Schema](references/yaml-schema.md) - bunnyshell.yaml configuration reference
 - [Component Types](references/components.md) - Helm, Kubernetes, Terraform, Docker Compose, etc.
 - [Variables & Interpolation](references/variables.md) - Secrets, scopes, Twig filters
+- [Template Update Playbook](references/template-update-playbook.md) - Process for updating templates
+- [Image Versions](references/image-versions.md) - Recommended Docker image versions
+- [Troubleshooting](references/troubleshooting.md) - Common issues and solutions
