@@ -10,17 +10,20 @@ Manage cloud environments using the Bunnyshell platform via the `bns` CLI.
 ## Prerequisites
 
 - **CLI installed**: `bns` command available (install via Homebrew: `brew install bunnyshell/tap/bunnyshell-cli`)
-- **Authentication**: Profile configured with API token from https://environments.bunnyshell.com/access-token
+- **Authentication**: API token from https://environments.bunnyshell.com/access-token
 
-Check if CLI is configured:
+**Authenticate via environment variable (recommended):**
 ```bash
+export BUNNYSHELL_TOKEN=YOUR_TOKEN
 bns environments list
 ```
 
-If not configured, add a profile:
+**Alternative — persistent profile (interactive terminal only):**
 ```bash
 bns configure profiles add --name default --token YOUR_TOKEN --default
 ```
+
+**Warning:** `bns configure profiles add` prompts interactively and will hang in non-interactive/scripting contexts. Prefer `export BUNNYSHELL_TOKEN` when automating.
 
 ## Core Workflows
 
@@ -36,6 +39,13 @@ bns environments show --id <ENV_ID>
 # Create from template
 bns environments create \
   --from-template <TEMPLATE_ID> \
+  --name "My Env" \
+  --project <PROJECT_ID> \
+  --k8s <CLUSTER_ID>
+
+# Create from local bunnyshell.yaml
+bns environments create \
+  --from-path bunnyshell.yaml \
   --name "My Env" \
   --project <PROJECT_ID> \
   --k8s <CLUSTER_ID>
@@ -75,80 +85,58 @@ bns environments update-configuration --id <ENV_ID> --from-path bunnyshell.yaml 
 bns components list --environment <ENV_ID>
 
 # Show component details
-bns components show <COMPONENT_ID>
-
-# Interactive shell session (execs /bin/sh in the container)
-bns ssh --component <COMPONENT_ID>
-
-# With specific container (for multi-container pods)
-bns ssh --component <COMPONENT_ID> --container <CONTAINER_NAME>
-
-# Execute commands non-interactively (preferred for scripting)
-bns ssh --component <COMPONENT_ID> --no-banner --non-interactive --shell "whoami; pwd; ls -lah"
+bns components show --id <COMPONENT_ID>
 ```
-
-**Note:** `bns ssh` is not real SSH - it executes `/bin/sh` in the container. Use the `--shell` flag to pass commands for non-interactive execution. `bns components exec` does not exist.
 
 ### 3. Executing Commands in Containers
 
-There are two main approaches to execute commands in component containers:
+#### Option A: Using `bns exec` (Recommended)
 
-#### Option A: Using `bns ssh` (Recommended)
+The `bns exec` command runs commands in a component's container. It handles kubeconfig automatically.
 
-The `bns ssh` command executes `/bin/sh` in the container (not real SSH). It handles kubeconfig automatically.
+```bash
+# Run a command (non-interactive)
+bns exec <COMPONENT_ID> -- ls -la /app
+bns exec <COMPONENT_ID> -- cat /etc/nginx/sites-enabled/default
+bns exec <COMPONENT_ID> -- python3 -c "print('hello')"
+
+# Interactive shell
+bns exec <COMPONENT_ID> --tty --stdin
+
+# Specific container (for multi-container pods)
+bns exec <COMPONENT_ID> -c <CONTAINER_NAME> -- whoami
+
+# Pipe a local script into the container
+bns exec <COMPONENT_ID> --stdin -- python3 < local-script.py
+```
+
+#### Option B: Using `bns ssh` (Interactive Shell)
+
+The `bns ssh` command opens an interactive `/bin/sh` session. Prefer `bns exec` for non-interactive use.
 
 ```bash
 # Interactive shell session
 bns ssh --component <COMPONENT_ID>
 
-# With specific container (if pod has multiple containers)
+# With specific container
 bns ssh --component <COMPONENT_ID> --container <CONTAINER_NAME>
-
-# Non-interactive command execution (best for scripting)
-bns ssh --component <COMPONENT_ID> --no-banner --non-interactive --shell "whoami"
-bns ssh --component <COMPONENT_ID> --no-banner --non-interactive --shell "php bin/console --version"
-bns ssh --component <COMPONENT_ID> --no-banner --non-interactive --shell "cat /etc/hosts; pwd; ls -la"
 ```
 
-**Flags for non-interactive use:**
-
-- `--no-banner` - Suppresses the welcome banner
-- `--non-interactive` - Disables interactive prompts
-- `--shell "<commands>"` - Commands to execute (semicolon-separated for multiple)
-
-#### Option B: Using `kubectl exec` (Direct Cluster Access)
+#### Option C: Using `kubectl exec` (Direct Cluster Access)
 
 Alternative when you have direct cluster access and kubeconfig configured. **Requires cluster credentials.**
 
-**Prerequisites for kubectl:**
-1. **kubectl installed**: The Kubernetes CLI must be available
-2. **Kubeconfig configured**: You need a valid kubeconfig with credentials for the cluster
-   - The kubeconfig is typically at `~/.kube/config` or set via `KUBECONFIG` env var
-   - Must have credentials for the Kubernetes cluster where the environment runs
-   - Bunnyshell environments run on clusters configured via "Kubernetes Integrations"
-3. **Network access**: Your machine must be able to reach the Kubernetes API server
-
-**Step-by-step workflow:**
-
 ```bash
-# 1. Get the environment's namespace (format: env-<UNIQUE>)
+# 1. Get the environment's namespace
 bns environments show --id <ENV_ID> --output json | jq -r '.namespace'
-# Example output: "7uyzlw" → namespace is "env-7uyzlw"
+# Output: "7uyzlw" → namespace is "env-7uyzlw"
 
 # 2. List pods in the namespace
 kubectl get pods -n env-<NAMESPACE>
 
-# 3. Execute command in a specific pod/container
+# 3. Execute command
 kubectl exec -n env-<NAMESPACE> <POD_NAME> -c <CONTAINER_NAME> -- <COMMAND>
-
-# Example: Check Symfony version in dashboard-php
-kubectl exec -n env-7uyzlw dashboard-php-7bb5d69574-2k6jc -c dashboard-php -- php bin/console --version
 ```
-
-**Finding the right pod and container names:**
-- Pod names typically follow the pattern: `<component-name>-<replicaset-hash>-<pod-hash>`
-- Container names often match the component name, but multi-container pods may differ
-- Use `kubectl describe pod <POD_NAME> -n env-<NAMESPACE>` to see all containers
 
 ### 4. Viewing Runtime / Container Logs
 
@@ -210,8 +198,8 @@ bns pipeline list --environment <ENV_ID>
 # Show pipeline details
 bns pipeline show --id <PIPELINE_ID>
 
-# List jobs in a pipeline
-bns pipeline jobs --id <PIPELINE_ID>
+# List jobs in a pipeline (positional argument, not --id)
+bns pipeline jobs <PIPELINE_ID>
 
 # Monitor pipeline progress (waits until completion)
 bns pipeline monitor --id <PIPELINE_ID>
@@ -250,8 +238,8 @@ bns pipeline logs --job <JOB_ID> -o json
 ### 6. Remote Development
 
 ```bash
-# Shell into component (execs /bin/sh, not real SSH)
-bns ssh --component <COMPONENT_ID>
+# Shell into component
+bns exec <COMPONENT_ID> --tty --stdin
 
 # Port forwarding
 bns port-forward 5432 --component <COMPONENT_ID>          # Same local/remote
@@ -395,6 +383,28 @@ bns components list --environment <ENV_ID> --output json | jq '._embedded.item[]
 bns environments list --output json | jq -r '._embedded.item[].id'
 ```
 
+### JSON Field Names by Resource Type
+
+Field names differ across resource types. Key fields to know:
+
+| Resource | Key Fields |
+|----------|-----------|
+| **Environments** | `id`, `name`, `operationStatus` (not `status`), `namespace`, `kubernetesIntegration` |
+| **Components** | `id`, `name`, `operationStatus`, `publicURLs` (not `endpoints`) |
+| **K8s Integrations** | `id`, `clusterName` (not `name`), `cloudProvider`, `status` |
+| **Projects** | `id`, `name`, `organization` |
+| **Pipelines** | `id`, `status`, `description` |
+
+**Getting component URLs:**
+```bash
+bns components show --id <COMPONENT_ID> --output json | jq -r '.publicURLs[]'
+```
+
+**Getting a project's organization (needed for secret encryption):**
+```bash
+bns projects show --id <PROJECT_ID> --output json | jq -r '.organization'
+```
+
 ## Clone and Customize Workflow
 
 Complete workflow for cloning an environment and customizing it:
@@ -424,6 +434,49 @@ bns pipeline list --environment <NEW_ENV_ID>
 bns environments show --id <NEW_ENV_ID>
 ```
 
+## Deploy from Scratch Workflow
+
+Complete workflow for deploying a new application to Bunnyshell:
+
+```bash
+# 1. Find the project
+bns projects list --search "my-project" --output json | jq '._embedded.item[] | {id, name}'
+
+# 2. Find the cluster
+bns k8s list --output json | jq '._embedded.item[] | {id, clusterName, status}'
+
+# 3. Get the organization ID (needed for encrypting secrets)
+bns projects show --id <PROJECT_ID> --output json | jq -r '.organization'
+
+# 4. Encrypt any secrets for bunnyshell.yaml
+bns secrets encrypt "my-secret-value" --organization <ORG_ID>
+# Returns: ENCRYPTED[...] — use this in bunnyshell.yaml environment variables
+
+# 5. Create the environment from a local bunnyshell.yaml
+bns environments create \
+  --from-path bunnyshell.yaml \
+  --name "my-env" \
+  --project <PROJECT_ID> \
+  --k8s <CLUSTER_ID>
+# Note the environment ID from the output
+
+# 6. Deploy (non-blocking)
+bns environments deploy --id <ENV_ID> --no-wait
+
+# 7. Monitor the deployment pipeline
+bns pipeline list --environment <ENV_ID>
+bns pipeline monitor --id <PIPELINE_ID>
+
+# 8. Get the public URL
+bns components list --environment <ENV_ID> --output json | \
+  jq -r '._embedded.item[] | "\(.name): \(.publicURLs[])"'
+```
+
+**Shortcut — update config and deploy in one step:**
+```bash
+bns environments update-configuration --id <ENV_ID> --from-path bunnyshell.yaml --deploy
+```
+
 ## REST API
 
 For CI/CD integrations or direct API access, see [references/api.md](references/api.md).
@@ -438,7 +491,8 @@ curl -X POST "https://api.environments.bunnyshell.com/v1/environments/ENV_ID/dep
 
 | Issue | Solution |
 |-------|----------|
-| Authentication failed | Run `bns configure profiles add` with valid token |
+| Authentication failed | `export BUNNYSHELL_TOKEN=<token>` or run `bns configure profiles add` (interactive only) |
+| 522 Connection timed out | Cluster may be behind a firewall. Verify Cloudflare IPs are whitelisted on the cluster's ingress controller. Check cluster network connectivity before debugging app config. |
 | Environment stuck deploying | Check `bns pipeline monitor --id <PIPELINE_ID>` or view in web UI |
 | Component not found in UI | Ensure Helm uses `--post-renderer /bns/helpers/helm/bns_post_renderer` |
 | Variables not injecting | Check variable scope (project > environment > component) |
