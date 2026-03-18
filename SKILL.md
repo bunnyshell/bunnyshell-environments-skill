@@ -10,6 +10,9 @@ Manage cloud environments using the Bunnyshell platform via the `bns` CLI.
 ## Prerequisites
 
 - **CLI installed**: `bns` command available (install via Homebrew: `brew install bunnyshell/tap/bunnyshell-cli`)
+- **CLI up to date**: Some flags/behaviors differ between versions. Update before debugging unexpected CLI errors:
+  - macOS: `brew upgrade bunnyshell/tap/bunnyshell-cli`
+  - Linux/Windows: Download latest from https://github.com/bunnyshell/cli/releases
 - **Authentication**: API token from https://environments.bunnyshell.com/access-token
 
 **Authenticate via environment variable (recommended):**
@@ -54,6 +57,8 @@ bns environments create \
 bns environments deploy --id <ENV_ID> --wait
 
 # Deploy environment (non-blocking)
+# Note: --output json is NOT supported with deploy/stop/start commands
+# These commands only support stylish (default) output format
 bns environments deploy --id <ENV_ID> --no-wait
 
 # Stop environment (scale down, preserve data)
@@ -94,6 +99,8 @@ bns components show --id <COMPONENT_ID>
 
 The `bns exec` command runs commands in a component's container. It handles kubeconfig automatically.
 
+**IMPORTANT:** For pods with sidecars/multiple containers, ALWAYS specify `-c <CONTAINER_NAME>`. Omitting `-c` triggers an interactive container picker that hangs in non-interactive contexts.
+
 ```bash
 # Run a command (non-interactive)
 bns exec <COMPONENT_ID> -- ls -la /app
@@ -103,7 +110,7 @@ bns exec <COMPONENT_ID> -- python3 -c "print('hello')"
 # Interactive shell
 bns exec <COMPONENT_ID> --tty --stdin
 
-# Specific container (for multi-container pods)
+# Specific container (REQUIRED for multi-container pods — omitting hangs)
 bns exec <COMPONENT_ID> -c <CONTAINER_NAME> -- whoami
 
 # Pipe a local script into the container
@@ -198,8 +205,9 @@ bns pipeline list --environment <ENV_ID>
 # Show pipeline details
 bns pipeline show --id <PIPELINE_ID>
 
-# List jobs in a pipeline (positional argument, not --id)
-bns pipeline jobs <PIPELINE_ID>
+# List jobs in a pipeline (use --id flag, NOT positional argument)
+# WARNING: `bns pipeline jobs <PIPELINE_ID>` (positional) may trigger interactive mode
+bns pipeline jobs --id <PIPELINE_ID>
 
 # Monitor pipeline progress (waits until completion)
 bns pipeline monitor --id <PIPELINE_ID>
@@ -216,9 +224,6 @@ bns pipeline logs --id <PIPELINE_ID>
 
 # View logs for a specific job directly
 bns pipeline logs --job <JOB_ID>
-
-# Show only failed jobs
-bns pipeline logs --environment <ENV_ID> --failed
 
 # Follow logs in real-time
 bns pipeline logs --environment <ENV_ID> -f
@@ -264,12 +269,31 @@ bns remote-development down
 bns variables import --var-file=/path/to/vars.env
 bns variables import --secret-file=/path/to/secrets.env
 
-# Encrypt/decrypt secrets
+# Encrypt a secret (positional argument — preferred)
 bns secrets encrypt "my-secret" --organization <ORG_ID>
+
+# Encrypt via stdin (use echo -n to avoid trailing newline!)
+echo -n "my-secret-value" | bns secrets encrypt --organization <ORG_ID>
+# WARNING: `echo` (without -n) adds a newline to the value,
+# causing subtle auth failures (e.g., password becomes "secret\n" not "secret")
+
+# Decrypt a secret
 bns secrets decrypt "ENCRYPTED[...]" --organization <ORG_ID>
 
 # Encrypt entire definition file
 bns secrets encrypt-definition --file bunnyshell.yaml --organization <ORG_ID>
+```
+
+**CRITICAL: SECRET[] and ENCRYPTED[] are mutually exclusive — use ONE, never both:**
+```yaml
+# Option A: SECRET["plaintext"] → Bunnyshell encrypts on save
+DB_PASSWORD: SECRET["my-password"]
+
+# Option B: ENCRYPTED[...] → Already encrypted via `bns secrets encrypt`
+DB_PASSWORD: ENCRYPTED[bXktcGFzc3dvcmQ...]
+
+# WRONG: SECRET["ENCRYPTED[...]"] → Double-encrypts, value is corrupted!
+DB_PASSWORD: SECRET["ENCRYPTED[bXktcGFzc3dvcmQ...]"]  # DO NOT DO THIS
 ```
 
 ## Configuration Authoring
@@ -450,7 +474,8 @@ bns projects show --id <PROJECT_ID> --output json | jq -r '.organization'
 
 # 4. Encrypt any secrets for bunnyshell.yaml
 bns secrets encrypt "my-secret-value" --organization <ORG_ID>
-# Returns: ENCRYPTED[...] — use this in bunnyshell.yaml environment variables
+# Returns: ENCRYPTED[...] — use this DIRECTLY in bunnyshell.yaml (do NOT wrap in SECRET[])
+# For stdin piping: echo -n "value" | bns secrets encrypt --organization <ORG_ID>
 
 # 5. Create the environment from a local bunnyshell.yaml
 bns environments create \
@@ -519,8 +544,13 @@ When asked to update or create Bunnyshell templates:
 - See [references/image-versions.md](references/image-versions.md) for recommended Docker image versions
 - See [references/troubleshooting.md](references/troubleshooting.md) for common issues and solutions
 
+## Framework Deployment Checklists
+
+See [references/framework-checklists.md](references/framework-checklists.md) for framework-specific deployment checklists (Laravel, Symfony, Node.js, Django, Rails).
+
 ## Reference Files
 
+- [Framework Checklists](references/framework-checklists.md) - Framework-specific deployment checklists
 - [CLI Reference](references/cli.md) - Complete CLI command documentation
 - [API Reference](references/api.md) - REST API for CI/CD integrations
 - [YAML Schema](references/yaml-schema.md) - bunnyshell.yaml configuration reference

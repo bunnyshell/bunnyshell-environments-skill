@@ -30,7 +30,18 @@ _(This guide is actively updated as issues are encountered)_
 
 ## Database Connection Issues
 
-_(Updated as issues are encountered)_
+### PostgreSQL password change not taking effect
+
+**Symptom:** After changing `POSTGRES_PASSWORD`, connections fail with "password authentication failed"
+
+**Cause:** PostgreSQL only reads `POSTGRES_PASSWORD` on first initialization (when the data directory is empty). The password is persisted in the volume. Subsequent env var changes are ignored.
+
+**Fix:** Delete the environment and recreate it (to destroy the PG volume), or exec into the PG container and change the password manually:
+```bash
+bns exec <PG_COMPONENT_ID> -c <CONTAINER_NAME> -- psql -U postgres -c "ALTER USER myuser PASSWORD 'newpassword'"
+```
+
+**Note:** This applies to all PostgreSQL Docker images (official, Bitnami, etc.) that use a persistent volume for `/var/lib/postgresql/data`.
 
 ## Bitnami Docker Hub Changes (Aug 2025)
 
@@ -62,6 +73,18 @@ If `bns components list --environment <ENV_ID>` returns empty, try adding `--org
 
 ### Non-interactive mode
 Always use `--no-wait` for deploy/delete when scripting, and avoid commands that may prompt for input.
+
+### `bns exec` hangs on multi-container pods
+Always pass `-c <CONTAINER_NAME>` when the component has sidecars or init containers. Without it, the CLI prompts for interactive container selection, which hangs in non-interactive contexts.
+
+### `bns pipeline jobs` goes interactive with positional argument
+Use `bns pipeline jobs --id <PIPELINE_ID>`, not `bns pipeline jobs <PIPELINE_ID>`. The positional form may trigger interactive mode and produce massive output.
+
+### `--output json` not supported with deploy/stop/start
+`bns environments deploy --output json` returns "Error: only stylish format is supported when following pipelines". Deploy, stop, and start commands only support the default stylish output.
+
+### `bns pipeline logs --failed` does not exist
+The `--failed` flag is not a valid option. To find failed jobs, use `bns pipeline jobs --id <PIPELINE_ID>` and check individual job status.
 
 ## Build Failures
 

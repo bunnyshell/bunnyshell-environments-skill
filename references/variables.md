@@ -37,6 +37,32 @@ SECRET_VALUE: ENCRYPTED[bXktcGFzc3dvcmQ...]
 | `ab"cd` | `SECRET['ab"cd']` or `SECRET["ab\"cd"]` |
 | `ab'cd` | `SECRET["ab'cd"]` or `SECRET['ab\'cd']` |
 
+### Common Mistakes
+
+**CRITICAL: SECRET[] and ENCRYPTED[] are mutually exclusive — never combine them:**
+
+```yaml
+# CORRECT: Use SECRET[] with plaintext — Bunnyshell encrypts on save
+DB_PASSWORD: SECRET["my-password"]
+
+# CORRECT: Use ENCRYPTED[] with pre-encrypted value from `bns secrets encrypt`
+DB_PASSWORD: ENCRYPTED[bXktcGFzc3dvcmQ...]
+
+# WRONG: Wrapping ENCRYPTED[] in SECRET[] double-encrypts — the container
+# receives the literal "ENCRYPTED[...]" string instead of the actual value
+DB_PASSWORD: SECRET["ENCRYPTED[bXktcGFzc3dvcmQ...]"]  # CORRUPTED!
+```
+
+**When encrypting via stdin, use `echo -n` to avoid trailing newlines:**
+
+```bash
+# CORRECT
+echo -n "my-password" | bns secrets encrypt --organization <ORG_ID>
+
+# WRONG — encrypts "my-password\n" (with newline), causing auth failures
+echo "my-password" | bns secrets encrypt --organization <ORG_ID>
+```
+
 ### Where SECRET[] Works
 
 - Project variables
