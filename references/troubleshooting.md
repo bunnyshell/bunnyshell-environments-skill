@@ -83,8 +83,12 @@ Use `bns pipeline jobs --id <PIPELINE_ID>`, not `bns pipeline jobs <PIPELINE_ID>
 ### `--output json` not supported with deploy/stop/start
 `bns environments deploy --output json` returns "Error: only stylish format is supported when following pipelines". Deploy, stop, and start commands only support the default stylish output.
 
-### `bns pipeline logs --failed` does not exist
-The `--failed` flag is not a valid option. To find failed jobs, use `bns pipeline jobs --id <PIPELINE_ID>` and check individual job status.
+### `bns pipeline logs --failed` does not exist (pre-v0.26)
+The `--failed` flag was never valid. As of v0.26, use `--jobStatus` and `--stepStatus` instead:
+```bash
+bns pipeline logs --id <PIPELINE_ID> --jobStatus failed
+bns pipeline logs --id <PIPELINE_ID> --stepStatus failed
+```
 
 ## Build Failures
 

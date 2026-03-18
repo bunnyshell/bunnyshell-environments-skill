@@ -67,6 +67,9 @@ bns environments stop --id <ENV_ID> --wait
 # Start environment (resume from stopped)
 bns environments start --id <ENV_ID> --wait
 
+# Abort a running action (deploy, start, stop, etc.) (v0.26+)
+bns environment abort --id <ENV_ID>
+
 # Delete environment
 bns environments delete --id <ENV_ID>
 
@@ -202,6 +205,12 @@ kubectl logs -n env-<NAMESPACE> <POD_NAME> -c <CONTAINER_NAME> -f
 # List pipelines
 bns pipeline list --environment <ENV_ID>
 
+# List pipelines with sorting (v0.26+)
+bns pipeline list --environment <ENV_ID> --sort createdAt:desc
+
+# Filter pipelines by status
+bns pipeline list --environment <ENV_ID> --status failed
+
 # Show pipeline details
 bns pipeline show --id <PIPELINE_ID>
 
@@ -209,36 +218,41 @@ bns pipeline show --id <PIPELINE_ID>
 # WARNING: `bns pipeline jobs <PIPELINE_ID>` (positional) may trigger interactive mode
 bns pipeline jobs --id <PIPELINE_ID>
 
+# Filter jobs by status (v0.26+)
+bns pipeline jobs --id <PIPELINE_ID> --jobStatus failed
+# Possible values: pending, queued, in_progress, failed, abort_failed, success, skipped, aborting, aborted
+
 # Monitor pipeline progress (waits until completion)
 bns pipeline monitor --id <PIPELINE_ID>
+
+# Abort a running environment action (deploy, start, stop, etc.) (v0.26+)
+bns environment abort --id <ENV_ID>
 ```
 
 #### Pipeline Logs
 
 ```bash
-# View logs for an environment (interactive job selection)
-bns pipeline logs --environment <ENV_ID>
-
-# View logs for a specific pipeline
+# All logs for a pipeline
 bns pipeline logs --id <PIPELINE_ID>
 
+# Only logs from failed jobs (v0.26+)
+bns pipeline logs --id <PIPELINE_ID> --jobStatus failed
+
+# Only failed steps within all jobs (v0.26+)
+bns pipeline logs --id <PIPELINE_ID> --stepStatus failed
+
+# Both: failed jobs AND failed steps only
+bns pipeline logs --id <PIPELINE_ID> --jobStatus failed --stepStatus failed
+
 # View logs for a specific job directly
-bns pipeline logs --job <JOB_ID>
+bns pipeline logs --id <PIPELINE_ID> --job <JOB_ID>
 
-# Follow logs in real-time
-bns pipeline logs --environment <ENV_ID> -f
-
-# Filter by step name
-bns pipeline logs --job <JOB_ID> --step deploy
-
-# Last N lines per step
-bns pipeline logs --job <JOB_ID> --tail 50
+# Logs for the latest pipeline in an environment
+bns pipeline logs --id "$(bns pipeline list --environment <ENV_ID> --sort=createdAt:desc -o json | jq -r '._embedded.item[0].id')"
 
 # Output formats: stylish (default), json, yaml, raw
 bns pipeline logs --job <JOB_ID> -o json
 ```
-
-**Note:** `bns pipeline cancel` does not exist. Use the web UI to cancel pipelines.
 
 ### 6. Remote Development
 

@@ -81,6 +81,7 @@ bns environments clone --id <ENV_ID> --name "Cloned Env"
 bns environments deploy --id <ENV_ID> --wait
 bns environments stop --id <ENV_ID> --wait
 bns environments start --id <ENV_ID> --wait
+bns environment abort --id <ENV_ID>            # Abort running action (v0.26+)
 bns environments delete --id <ENV_ID> --force
 
 # Configuration (export/import)
@@ -122,27 +123,40 @@ bns components port-forward --id <COMPONENT_ID> 8080:80
 ```bash
 # List & show
 bns pipeline list --environment <ENV_ID>
+bns pipeline list --environment <ENV_ID> --sort createdAt:desc  # Newest first
+bns pipeline list --environment <ENV_ID> --status failed        # Filter by status
+bns pipeline list --event <EVENT_ID>                            # Filter by event
 bns pipeline show --id <PIPELINE_ID>
 
 # List jobs in a pipeline
 bns pipeline jobs --id <PIPELINE_ID>
+bns pipeline jobs --id <PIPELINE_ID> --jobStatus failed         # Filter by job status
+# Possible --jobStatus values: pending, queued, in_progress, failed, abort_failed, success, skipped, aborting, aborted
 
 # Monitor progress (waits until completion)
 bns pipeline monitor --id <PIPELINE_ID>
 bns pipeline monitor --id <PIPELINE_ID> --interval 5s  # Custom check interval
 
-# View logs (interactive job selection when --environment or --id used)
-bns pipeline logs --environment <ENV_ID>               # Pick from latest pipeline
-bns pipeline logs --id <PIPELINE_ID>                   # Pick from specific pipeline
-bns pipeline logs --job <JOB_ID>                       # Specific job directly
-bns pipeline logs --environment <ENV_ID> --failed      # Only failed jobs
-bns pipeline logs --environment <ENV_ID> -f            # Follow in real-time
-bns pipeline logs --job <JOB_ID> --step deploy         # Filter by step name
-bns pipeline logs --job <JOB_ID> --tail 50             # Last N lines per step
-bns pipeline logs --job <JOB_ID> -o json               # Output: stylish|json|yaml|raw
+# View logs
+bns pipeline logs --id <PIPELINE_ID>                                          # All logs for a pipeline
+bns pipeline logs --id <PIPELINE_ID> --jobStatus failed                       # Only failed jobs
+bns pipeline logs --id <PIPELINE_ID> --stepStatus failed                      # Only failed steps
+bns pipeline logs --id <PIPELINE_ID> --jobStatus failed --stepStatus failed   # Both filters
+bns pipeline logs --id <PIPELINE_ID> --job <JOB_ID>                           # Specific job
+bns pipeline logs --job <JOB_ID> -o json                                      # Output: stylish|json|yaml|raw
+# Possible --stepStatus values: failed, success
+
+# Abort a running environment action (deploy, start, stop, etc.)
+bns environment abort --id <ENV_ID>
 ```
 
-**Note:** `bns pipeline cancel` does not exist. Use the web UI to cancel pipelines.
+## Events
+
+```bash
+bns events list --environment <ENV_ID>
+bns events list --environment <ENV_ID> --sort createdAt:desc    # Newest first
+bns events list --environment <ENV_ID> --type deploy --status in_progress
+```
 
 ## Kubernetes Clusters
 
@@ -280,6 +294,27 @@ bns remote-development config   # Manage remote development config
 bns git info
 bns git branch
 ```
+
+## Command Aliases (v0.26+)
+
+Every resource command accepts singular, plural, and short forms:
+
+| Full (plural) | Singular | Short |
+|---|---|---|
+| `environments` | `environment` | `env`, `envs` |
+| `components` | `component` | `comp`, `comps` |
+| `organizations` | `organization` | `org`, `orgs` |
+| `projects` | `project` | `proj`, `projs` |
+| `templates` | `template` | `tpl`, `tpls` |
+| `variables` | `variable` | `var`, `vars` |
+| `secrets` | `secret` | `sec` |
+| `project-variables` | `project-variable` | `pvar`, `pvars` |
+| `container-registries` | `container-registry` | `creg`, `cregs` |
+| `events` | `event` | — |
+| `pipelines` | `pipeline` | `pipe`, `pipes` |
+| `configure` | — | `config` |
+
+Example: `bns comp list`, `bns component list`, and `bns components list` all work.
 
 ## Shell Completion
 
