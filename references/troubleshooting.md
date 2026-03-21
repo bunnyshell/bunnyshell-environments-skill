@@ -92,4 +92,73 @@ bns pipeline logs --id <PIPELINE_ID> --stepStatus failed
 
 ## Build Failures
 
-_(Updated as issues are encountered)_
+### Package not available in Debian repos
+
+**Symptom:** `E: Package 'ttyd' has no installation candidate` (or similar for other packages)
+
+**Cause:** The package is not in the standard Debian/Ubuntu apt repositories for the target release (e.g., `bookworm`). This is common for newer or niche tools.
+
+**Fix:** Install from GitHub releases or other sources instead of apt:
+```dockerfile
+# WRONG - ttyd is not in Debian bookworm repos
+RUN apt-get install -y ttyd
+
+# CORRECT - install binary from GitHub releases
+RUN wget -qO /usr/local/bin/ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 \
+    && chmod +x /usr/local/bin/ttyd
+```
+
+**General rule:** Always verify package availability for your target distro before using `apt-get install`. If unavailable, check the project's GitHub releases for static binaries.
+
+### Go version mismatch in multi-stage builds
+
+**Symptom:** `go install` fails with `requires go >= 1.24.0 (running go 1.23.x; GOTOOLCHAIN=local)`
+
+**Cause:** The Go module requires a newer Go version than the builder stage provides.
+
+**Fix:** Check the project's `go.mod` for the required Go version and match your builder image:
+```dockerfile
+# Check required version first, then match:
+FROM golang:1.24-bookworm AS builder
+RUN go install github.com/example/tool@latest
+```
+
+### Always test Dockerfiles locally before deploying
+
+**Best practice:** Build with `--platform linux/amd64` locally before pushing to Bunnyshell, since Bunnyshell builds on amd64:
+```bash
+docker build --platform linux/amd64 -f .docker/Dockerfile -t myimage:test .
+```
+This catches package availability issues, version mismatches, and build errors before wasting a deploy cycle.
+
+## Web Terminal (ttyd) Setup
+
+When creating workspace/CLI templates that need browser-based terminal access:
+
+### Installation
+ttyd is NOT in Debian apt repos. Install the binary directly:
+```dockerfile
+RUN wget -qO /usr/local/bin/ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 \
+    && chmod +x /usr/local/bin/ttyd
+```
+
+### Basic Authentication
+Use the `-c` flag for HTTP basic auth:
+```dockerfile
+CMD ["sh", "-c", "ttyd -W -c ${TTYD_USER}:${TTYD_PASS} bash"]
+```
+Pass credentials via environment variables in `bunnyshell.yaml`:
+```yaml
+environmentVariables:
+    TTYD_USER: 'admin'
+    TTYD_PASS: 'changeme'
+```
+
+### Port
+ttyd defaults to port 7681. Expose it in the Dockerfile and map it in `bunnyshell.yaml`:
+```yaml
+hosts:
+    - hostname: 'terminal-{{ env.base_domain }}'
+      path: /
+      servicePort: 7681
+```

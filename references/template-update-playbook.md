@@ -109,8 +109,57 @@ curl -sI https://<hostname>/
 bns environments delete --id <ENV_ID> --no-wait
 ```
 
+## Template vs Deployed Config Pattern
+
+When templates need different security or config between the committed version and live deployments:
+
+1. Commit templates with open defaults (e.g., `allowedIps: 0.0.0.0/0`)
+2. Create a temp copy with overrides for deployment:
+   ```bash
+   cp bunnyshell.yaml /tmp/deploy.yaml
+   sed -i 's|0.0.0.0/0|185.181.102.37/32|' /tmp/deploy.yaml
+   bns environments update-configuration --id <ENV_ID> --from-path /tmp/deploy.yaml --deploy
+   ```
+3. This keeps templates reusable while allowing per-deployment restrictions
+
+## Efficient Multi-Environment Deploy
+
+When deploying multiple environments in parallel:
+
+```bash
+# Create all environments (parallel)
+for yaml in template1/bunnyshell.yaml template2/bunnyshell.yaml; do
+  bns environments create --from-path $yaml --name "..." --project <PID> --k8s <KID> &
+done
+wait
+
+# Deploy all (non-blocking)
+for env_id in ENV1 ENV2 ENV3; do
+  bns environments deploy --id $env_id --no-wait
+done
+
+# Check statuses
+for env_id in ENV1 ENV2 ENV3; do
+  bns environments show --id $env_id --output json | \
+    python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"{d['name']}: {d['operationStatus']}\")"
+done
+```
+
+## One-Step Update + Deploy
+
+The most efficient way to update config and redeploy:
+```bash
+bns environments update-configuration --id <ENV_ID> --from-path bunnyshell.yaml --deploy
+```
+This waits for completion and prints endpoints when done.
+
 ## Common Pitfalls
 
 - **Bitnami images**: As of Aug 2025, Bitnami restructured Docker Hub. Use official images instead of `bitnami/*` with version tags.
 - **bns components list**: May return empty without `--organization` flag
 - **bns components show**: Requires `--id` flag, positional arg triggers interactive mode
+- **ttyd not in apt**: The `ttyd` web terminal package is not in Debian bookworm repos. Install binary from GitHub releases (see [troubleshooting.md](troubleshooting.md#web-terminal-ttyd-setup))
+- **Go version mismatches**: Always check `go.mod` requirements before using `go install` in multi-stage Dockerfiles
+- **Always local build first**: Run `docker build --platform linux/amd64` locally before deploying to catch build errors early
+- **`gitRepo` must be remote**: `--from-path` reads YAML locally but the `gitRepo` field must point to an accessible remote Git repo (Bunnyshell pulls source remotely to build)
+- **Component URLs**: Public URLs only appear in `bns components show --id <ID>`, not in list output

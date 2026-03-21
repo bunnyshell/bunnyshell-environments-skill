@@ -41,6 +41,12 @@ Last verified: 2026-02-14
 |---|---|---|
 | `mailhog/mailhog:latest` | `axllent/mailpit:latest` | Drop-in replacement. Same ports: 1025 (SMTP), 8025 (web UI) |
 
+## Developer Tools
+
+| Tool | Recommended Version | Install Method | Notes |
+|---|---|---|---|
+| ttyd (web terminal) | `1.7.7` | Binary from [GitHub releases](https://github.com/tsl0922/ttyd/releases) | NOT in Debian apt repos. Use: `wget -qO /usr/local/bin/ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 && chmod +x /usr/local/bin/ttyd`. Supports basic auth via `-c user:pass` flag. |
+
 ## Magento-Specific
 
 | Component | Recommended Image | Notes |
