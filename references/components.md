@@ -121,7 +121,9 @@ deploy:
 
 ## Docker Compose Key Support
 
-### Supported Keys
+Bunnyshell uses **Kompose** under the hood to translate Docker Compose definitions into Kubernetes resources. This means any Docker Compose key that Kompose supports will work, even if not explicitly listed below.
+
+### Explicitly Documented Keys
 
 | Key | Kubernetes Mapping |
 |-----|-------------------|
@@ -137,6 +139,22 @@ deploy:
 | `configs` | ConfigMap |
 | `secrets` | Secret |
 | `tmpfs` | emptyDir with Memory medium |
+
+### Additional Kompose-Supported Keys
+
+These are not documented by Bunnyshell but work because Kompose translates them:
+
+| Key | Kubernetes Mapping |
+|-----|-------------------|
+| `privileged: true` | `securityContext.privileged: true` |
+| `cap_add` | `securityContext.capabilities.add` |
+| `cap_drop` | `securityContext.capabilities.drop` |
+| `devices` | Volume mounts for devices |
+| `user` | `securityContext.runAsUser` |
+| `working_dir` | Container `workingDir` |
+| `entrypoint` | Container `command` |
+| `stdin_open` | Container `stdin` |
+| `tty` | Container `tty` |
 
 ### Not Supported
 

@@ -65,6 +65,10 @@ components:
             annotations: {}        # e.g. cert-manager.io/cluster-issuer: letsencrypt-prod
 ```
 
+## Docker Compose Translation
+
+Bunnyshell uses **Kompose** to translate Docker Compose definitions into Kubernetes resources. This means standard Docker Compose keys that Kompose supports (e.g., `privileged`, `cap_add`, `cap_drop`, `user`, `working_dir`, `entrypoint`, `stdin_open`, `tty`, `devices`) will be translated to their Kubernetes equivalents even if not explicitly documented by Bunnyshell. See [components.md](components.md#docker-compose-key-support) for the full list.
+
 ## Docker Compose Components
 
 ### Application / Service / Database
