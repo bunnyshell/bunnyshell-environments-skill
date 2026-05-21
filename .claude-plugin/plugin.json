@@ -1,0 +1,14 @@
+{
+  "name": "bunnyshell-environments",
+  "version": "1.0.0",
+  "description": "Manage Bunnyshell cloud environments via the bns CLI — full lifecycle, components, remote dev, and bunnyshell.yaml authoring.",
+  "author": {
+    "name": "Bunnyshell",
+    "email": "support@bunnyshell.com",
+    "url": "https://www.bunnyshell.com"
+  },
+  "homepage": "https://github.com/bunnyshell/bunnyshell-environments-skill",
+  "repository": "https://github.com/bunnyshell/bunnyshell-environments-skill",
+  "license": "MIT",
+  "keywords": ["bunnyshell", "skill", "environments", "devops", "cli", "bns"]
+}
