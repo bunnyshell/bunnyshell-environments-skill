@@ -1,5 +1,5 @@
 {
-  "name": "bunnyshell-environments",
+  "name": "bunnyshell-environments-skill",
   "version": "1.0.0",
   "description": "Manage Bunnyshell cloud environments via the bns CLI — full lifecycle, components, remote dev, and bunnyshell.yaml authoring.",
   "author": {
