@@ -312,6 +312,8 @@ DB_PASSWORD: SECRET["ENCRYPTED[bXktcGFzc3dvcmQ...]"]  # DO NOT DO THIS
 
 ## Configuration Authoring
 
+**NEVER create environment variables starting with `BNS_` — this prefix is reserved by Bunnyshell and will be rejected.**
+
 When asked to create or modify `bunnyshell.yaml`:
 - See [references/yaml-schema.md](references/yaml-schema.md) for complete schema
 - See [references/components.md](references/components.md) for component types
