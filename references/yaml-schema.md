@@ -449,6 +449,14 @@ volumes:
 | `disk` | Block storage (EBS, PD) | ReadWriteOnce | Default; single-pod workloads (databases) |
 | `network` | Network filesystem (EFS, Filestore) | ReadWriteMany | Multiple pods need the same volume, or pod rescheduling across nodes |
 
+**DigitalOcean (DOKS): use `network` — `disk` is not available.** Bunnyshell provisions no
+`bns-disk-sc` StorageClass on DigitalOcean, deliberately, to avoid pods failing to schedule
+against the max-volumes-per-node limit. `type: disk` therefore has no StorageClass to bind
+to and the PVC stays **Pending**. All volumes — including databases and caches — go through
+`bns-network-sc`. AWS, GCP and Scaleway can have both classes, but you create them yourself.
+
+See: https://documentation.bunnyshell.com/docs/k8s-cluster-volumes-do
+
 ## Custom Domains and SSL
 
 ### Custom Domain with ExternalDNS
