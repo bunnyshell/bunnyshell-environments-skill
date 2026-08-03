@@ -35,29 +35,7 @@ bns configure profiles add --name default --token YOUR_TOKEN --default
 
 ## Installation
 
-### Option 1 (recommended): Install as a plugin
-
-This repository is its own plugin marketplace, so it can be installed directly.
-
-**Claude Code:**
-
-```
-/plugin marketplace add bunnyshell/bunnyshell-environments-skill
-/plugin install bunnyshell-environments@bunnyshell
-```
-
-Update later with `/plugin marketplace update bunnyshell`.
-
-**Claude Desktop** (Chat tab, paid plans only):
-
-*Customize → Plugins → Personal plugins → **+** → Add marketplace → Add from a repository*, point it at
-`https://github.com/bunnyshell/bunnyshell-environments-skill`, click **Sync**, then **Install**.
-The skill then appears under `/` and `+` in a conversation.
-
-> Note: the Desktop **Chat** plugin list and the **Code** tab's marketplaces are separate registries —
-> adding the marketplace in one does not register it in the other.
-
-### Option 2: Manual — Global Installation
+### Option 1: Global Installation
 
 ```bash
 git clone https://github.com/bunnyshell/bunnyshell-environments-skill.git /tmp/bunnyshell-skill-temp
@@ -68,7 +46,7 @@ cp -r /tmp/bunnyshell-skill-temp ~/.claude/skills/bunnyshell-environments
 rm -rf /tmp/bunnyshell-skill-temp
 ```
 
-### Option 3: Manual — Project-Specific Installation
+### Option 2: Project-Specific Installation
 
 ```bash
 git clone https://github.com/bunnyshell/bunnyshell-environments-skill.git /tmp/bunnyshell-skill-temp
