@@ -28,6 +28,36 @@ bns configure profiles add --name default --token YOUR_TOKEN --default
 
 **Warning:** `bns configure profiles add` prompts interactively and will hang in non-interactive/scripting contexts. Prefer `export BUNNYSHELL_TOKEN` when automating.
 
+### Personal Access Tokens (PAT) — scoped alternative to the account-wide token
+
+A PAT is scoped to specific organizations, projects, or environments and carries only the permissions you select. **Prefer a PAT over the account-wide token** whenever the token will live somewhere persistent — CI, a `.mise.toml`, a shell profile, a teammate's machine.
+
+**Created in the UI only.** *User menu → Access Token → Create PAT*, or go to
+https://environments.bunnyshell.com/account/settings/access-tokens and use the **Create PAT** button.
+A PAT **cannot be created from the API or the CLI** — it requires a signed-in user, so automation holding an existing token cannot mint new ones.
+
+**Three scope levels.** For each, you pick the entities the token covers (any organization the user belongs to, any project, any environment) and the permissions it gets:
+
+| Scope | Permissions available |
+|-------|----------------------|
+| Organization | `view`, `manage`, `delete`, `create:project`, `integrations` |
+| Project | `view`, `manage`, `delete`, `create:environment` |
+| Environment | `view`, `manage`, `delete`, `operate` |
+
+A PAT can carry the same permissions as its creator or fewer — never more. An **expiration date** can also be set at creation.
+
+**Used exactly like the account-wide token** — no different header or flag:
+
+```bash
+export BUNNYSHELL_TOKEN=YOUR_PAT
+bns environments list
+
+# or per-command
+bns environments list --token YOUR_PAT
+```
+
+**Why this matters:** an account-wide token can see *every* organization its user belongs to, so a misloaded token operates successfully against the **wrong organization's** environments. The failure mode is not an auth error — it is commands quietly succeeding against the wrong client. Scoping a PAT to one organization makes that mistake impossible rather than merely detectable after the fact.
+
 ## Core Workflows
 
 ### 1. Environment Operations
@@ -533,6 +563,7 @@ curl -X POST "https://api.environments.bunnyshell.com/v1/environments/ENV_ID/dep
 | Issue | Solution |
 |-------|----------|
 | Authentication failed | `export BUNNYSHELL_TOKEN=<token>` or run `bns configure profiles add` (interactive only) |
+| Commands succeed but return **another organization's** environments | An account-wide token sees every org the user belongs to — there is no auth error, just wrong data. Verify with `bns organizations list`, and use an **organization-scoped PAT** to prevent it (see [Personal Access Tokens](#personal-access-tokens-pat--scoped-alternative-to-the-account-wide-token)) |
 | 522 Connection timed out | Cluster may be behind a firewall. Verify Cloudflare IPs are whitelisted on the cluster's ingress controller. Check cluster network connectivity before debugging app config. |
 | Environment stuck deploying | Check `bns pipeline monitor --id <PIPELINE_ID>` or view in web UI |
 | Component not found in UI | Ensure Helm uses `--post-renderer /bns/helpers/helm/bns_post_renderer` |

@@ -17,11 +17,19 @@ Claude autonomously decides when to use this skill based on your environment man
 ## Prerequisites
 
 - **Bunnyshell CLI** - Install via Homebrew: `brew install bunnyshell/tap/bunnyshell-cli`
-- **API Token** - Get from https://environments.bunnyshell.com/access-token
+- **API Token** - Get from https://environments.bunnyshell.com/access-token, or create a scoped
+  **Personal Access Token (PAT)** at
+  https://environments.bunnyshell.com/account/settings/access-tokens (UI only). A PAT is limited to
+  chosen organizations, projects, or environments with per-scope permissions and an optional
+  expiry — prefer it for CI and any persistently stored credential. See the skill's
+  Authentication section for the full permission matrix.
 
 Configure the CLI:
 
 ```bash
+export BUNNYSHELL_TOKEN=YOUR_TOKEN   # recommended, works for both token types
+
+# or a persistent profile (interactive terminals only)
 bns configure profiles add --name default --token YOUR_TOKEN --default
 ```
 
