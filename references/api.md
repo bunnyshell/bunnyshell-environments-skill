@@ -10,6 +10,13 @@ Get your token from: https://environments.bunnyshell.com/access-token
 Authorization: Bearer YOUR_API_TOKEN
 ```
 
+A scoped **Personal Access Token** works here identically — same `Bearer` header. Prefer one for CI
+and other stored credentials, since it can be limited to specific organizations/projects/environments
+with per-scope permissions and an expiry date. **PATs are created in the UI only**
+(https://environments.bunnyshell.com/account/settings/access-tokens) — there is no API to mint one,
+so a token cannot create another token. See the Authentication section of `SKILL.md` for the
+permission matrix.
+
 ## Base URL
 
 ```
