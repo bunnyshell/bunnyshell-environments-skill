@@ -43,6 +43,42 @@ bns exec <PG_COMPONENT_ID> -c <CONTAINER_NAME> -- psql -U postgres -c "ALTER USE
 
 **Note:** This applies to all PostgreSQL Docker images (official, Bitnami, etc.) that use a persistent volume for `/var/lib/postgresql/data`.
 
+## An operator's admission webhook doesn't see my configuration
+
+**Symptom:** an operator that injects sidecars or init containers (APM agents,
+OpenTelemetry, service meshes, secret injectors) never matches your pods, even though the
+variable or label looks correct in `bunnyshell.yaml`.
+
+**Cause:** the webhook only sees the **pod spec**. Of the things you can set per component:
+
+| Set in `bunnyshell.yaml` | Lands on | Visible to a webhook? |
+|---|---|---|
+| `environment:` | `env-file-<component>` ConfigMap, via `envFrom` | ❌ |
+| `labels:` (Kompose → annotations) | pod **annotations** | ✅ |
+| `deploy: labels:` (Kompose → workload) | Deployment labels only | ❌ pod not labelled |
+| `pod: labels/annotations:` | not a supported key | ❌ not applied |
+
+**Diagnose:**
+
+```bash
+kubectl get pod <pod> -o jsonpath='{.spec.containers[0].env}'   # inline env only
+kubectl get pod <pod> -o jsonpath='{.metadata.labels}'
+kubectl get pod <pod> -o jsonpath='{.metadata.annotations}'
+kubectl logs -n <operator-ns> deploy/<operator> | grep -i <pod-name>
+```
+
+**Workarounds**, in order of preference:
+
+1. **Select by container name** if the operator supports it — container names match the
+   component name and are stable.
+2. **Select by pod annotation** via `labels:`, if the operator reads annotations. Check the
+   semantics for pods *without* the annotation: some operators treat "no annotation" as
+   "match everything", which will inject into sidecars too.
+3. **Namespace selector** — coarse, but every operator supports it, and each Bunnyshell
+   environment gets its own namespace.
+
+Verified against New Relic's `k8s-agents-operator` (2026-08).
+
 ## Bitnami Docker Hub Changes (Aug 2025)
 
 Bitnami restructured their public Docker Hub catalog:

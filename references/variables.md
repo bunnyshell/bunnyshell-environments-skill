@@ -12,6 +12,26 @@ Environment Variable Groups  ← Must be explicitly included
 Component Variables       ← Highest priority, final value
 ```
 
+## How variables reach the container
+
+Component `environment:` values are delivered through a generated ConfigMap
+(`env-file-<component>`) mounted with `envFrom`, not written inline into the container's
+`env:` list. Platform builtins such as `BNS_DEPLOY_TIMESTAMP` do arrive inline.
+
+This keeps a variable change from rewriting the pod spec, but it has one consequence worth
+knowing: **a Kubernetes admission webhook cannot read them.** Webhooks are handed the pod
+spec at creation time and never resolve `envFrom` references, so an operator that selects
+pods by environment variable will not match on anything set this way.
+
+```bash
+# what an admission webhook can see
+kubectl get pod <pod> -o jsonpath='{.spec.containers[0].env}'
+# where the component's variables actually are
+kubectl get cm env-file-<component> -o jsonpath='{.data}'
+```
+
+See `troubleshooting.md` -> "An operator's admission webhook doesn't see my configuration".
+
 ## Secrets
 
 ### SECRET[] Syntax

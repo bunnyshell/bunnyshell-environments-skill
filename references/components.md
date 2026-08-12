@@ -139,6 +139,19 @@ Bunnyshell uses **Kompose** under the hood to translate Docker Compose definitio
 | `configs` | ConfigMap |
 | `secrets` | Secret |
 | `tmpfs` | emptyDir with Memory medium |
+| `labels` | `Metadata.Annotations` — reaches the **pod** as annotations |
+| `deploy: labels` | `Workload.Metadata.Labels` — the Deployment only, **not** the pod template |
+
+Both label mappings come from Kompose: Docker labels are arbitrary metadata, so Kompose
+targets annotations rather than Kubernetes labels, which are selectors with stricter syntax.
+
+### The `pod:` block
+
+`pod:` is a Bunnyshell extension, not a Compose key — Kompose never sees it. The supported
+key is `sidecar_containers`. Other keys placed under it (for example `labels:` or
+`annotations:`) are accepted by `update-configuration` without an error and do not appear in
+the stored definition, so verify with `bns environments definition --id <ENV>` after applying
+rather than assuming a key took effect.
 
 ### Additional Kompose-Supported Keys
 
