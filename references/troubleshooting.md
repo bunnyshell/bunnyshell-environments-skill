@@ -93,6 +93,46 @@ Bitnami restructured their public Docker Hub catalog:
 - Official image uses `/data` as default data dir (bitnami used `/bitnami/minio/data`)
 - Console runs on port 9001 by default with `--console-address :9001`
 
+## Definition validation errors
+
+### `This port is not a public port declared in dockerCompose.ports`
+
+**Cause:** a `hosts:` entry targets a `servicePort` that the **parent** component does not
+declare — commonly when the port belongs to a sidecar.
+
+**Fix:** declare the sidecar's port on the parent component too. The parent owns the
+Service, so every port routed by `hosts:` must appear in its `dockerCompose.ports`, even
+when another container is what listens on it.
+
+```yaml
+- kind: Service
+  name: app
+  dockerCompose:
+    ports:
+      - '8080:8080'   # this container
+      - '80:80'       # the nginx sidecar's port, declared here so hosts: can route to it
+  pod:
+    sidecar_containers:
+      - from: app-nginx
+```
+
+### `Value "env.vars.X" not found in the current context`
+
+**Cause:** the definition interpolates `{{ env.vars.X }}`, but environment variables are
+scoped to an environment that does not exist yet. On `environments create` there is nothing
+to resolve against.
+
+**Fix:** declare the values inline in the definition under `environmentVariables:` when
+creating, then manage them normally afterwards.
+
+```yaml
+environmentVariables:
+  MY_VAR: value
+```
+
+Note that values declared this way are stored in the definition in plaintext — see the
+`SECRET[]` syntax in `variables.md` for anything sensitive.
+
 ## bns CLI Gotchas
 
 ### `bns components show` requires `--id` flag
@@ -124,6 +164,23 @@ The `--failed` flag was never valid. As of v0.26, use `--jobStatus` and `--stepS
 ```bash
 bns pipeline logs --id <PIPELINE_ID> --jobStatus failed
 bns pipeline logs --id <PIPELINE_ID> --stepStatus failed
+```
+
+### `bns environments list` paginates interactively
+
+With more environments than fit one page, the command prints a "Navigate to a different
+page?" prompt and exits with `Error: EOF` in a non-interactive shell. Piping it to `grep`
+therefore searches **only the first page** and silently misses the rest — including
+environments you have just created. Filter server-side instead:
+
+```bash
+bns environments list --project <PROJECT_ID>
+```
+
+### Fetching a definition is `definition`, not `definition-get`
+
+```bash
+bns environments definition --id <ENV_ID> -o raw > env.yaml
 ```
 
 ## Build Failures

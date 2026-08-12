@@ -102,6 +102,50 @@ deploy:
   - 'kubectl apply -k .'
 ```
 
+### KubernetesManifest without a git repository
+
+`KubernetesManifest` does not require `gitRepo` — the manifest can be written inline in a
+`deploy:` step. Useful for a small set of cluster resources that has no repository of its
+own. Files created in one `deploy:` step persist for later steps.
+
+```yaml
+- kind: KubernetesManifest
+  name: my-resources
+  runnerImage: 'alpine/k8s:1.29.2'
+  deploy:
+    - |
+      cat <<'EOF' > manifest.yml
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: example
+        namespace: some-namespace
+      EOF
+    - 'kubectl apply -f manifest.yml'
+```
+
+`GenericComponent` appears to need a git source and fails to deploy without one, so prefer
+`KubernetesManifest` for repository-less command steps.
+
+**Targeting another namespace:** set `namespace:` in the manifest itself and do **not** use
+`bns_kustomize_init`, which pins resources to the environment's own namespace.
+
+**Adopting objects another tool created:** use
+`kubectl apply --server-side --force-conflicts`. A client-side apply has no
+`last-applied-configuration` to diff against when the object was created by a server-side
+applier (Helm, kluctl, another operator), so fields removed from your manifest survive
+silently and keep taking effect.
+
+**`destroy:` deserves a decision.** The default instinct is to delete what was created, but
+for resources meant to outlive the environment — cluster-scoped config, operator CRs,
+anything whose absence fails quietly — an explicit no-op with a comment is safer than
+tearing them down when someone cleans up an environment.
+
+```yaml
+  destroy:
+    - 'echo "left in place on purpose - remove manually if intended"'
+```
+
 ### Terraform Backend
 
 Bunnyshell-managed state backend:
@@ -145,14 +189,6 @@ Bunnyshell uses **Kompose** under the hood to translate Docker Compose definitio
 Both label mappings come from Kompose: Docker labels are arbitrary metadata, so Kompose
 targets annotations rather than Kubernetes labels, which are selectors with stricter syntax.
 
-### The `pod:` block
-
-`pod:` is a Bunnyshell extension, not a Compose key — Kompose never sees it. The supported
-key is `sidecar_containers`. Other keys placed under it (for example `labels:` or
-`annotations:`) are accepted by `update-configuration` without an error and do not appear in
-the stored definition, so verify with `bns environments definition --id <ENV>` after applying
-rather than assuming a key took effect.
-
 ### Additional Kompose-Supported Keys
 
 These are not documented by Bunnyshell but work because Kompose translates them:
@@ -177,6 +213,14 @@ These are not documented by Bunnyshell but work because Kompose translates them:
 - `links`, `external_links`
 - `restart` (Kubernetes handles this)
 - `logging` (use Kubernetes built-in)
+
+### The `pod:` block
+
+`pod:` is a Bunnyshell extension, not a Compose key — Kompose never sees it. The supported
+key is `sidecar_containers`. Other keys placed under it (for example `labels:` or
+`annotations:`) are accepted by `update-configuration` without an error and do not appear in
+the stored definition, so verify with `bns environments definition --id <ENV>` after applying
+rather than assuming a key took effect.
 
 ## Runner Images
 
