@@ -139,12 +139,19 @@ bns pipeline monitor --id <PIPELINE_ID> --interval 5s  # Custom check interval
 
 # View logs
 bns pipeline logs --id <PIPELINE_ID>                                          # All logs for a pipeline
-bns pipeline logs --id <PIPELINE_ID> --jobStatus failed                       # Only failed jobs
-bns pipeline logs --id <PIPELINE_ID> --stepStatus failed                      # Only failed steps
-bns pipeline logs --id <PIPELINE_ID> --jobStatus failed --stepStatus failed   # Both filters
+bns pipeline logs --id <PIPELINE_ID> --job-status failed                      # Only failed jobs
+bns pipeline logs --id <PIPELINE_ID> --step-status failed                     # Only failed steps
+bns pipeline logs --id <PIPELINE_ID> --job-status failed --step-status failed # Both filters
 bns pipeline logs --id <PIPELINE_ID> --job <JOB_ID>                           # Specific job
 bns pipeline logs --job <JOB_ID> -o json                                      # Output: stylish|json|yaml|raw
-# Possible --stepStatus values: failed, success
+# Possible --step-status values: failed, success
+# --job-status, --step-status and --job are repeatable (stringArray): pass the flag
+# once per value, e.g. --step-status failed --step-status success
+
+# DEPRECATED on `pipeline logs`: --jobStatus / --stepStatus. Both still work and behave
+# identically, but emit e.g. "Flag --stepStatus has been deprecated, use --step-status".
+# The rename is scoped to `pipeline logs` only — `pipeline jobs` above still takes the
+# camelCase --jobStatus, and rejects --job-status with "unknown flag". (Verified v0.26.1.)
 
 # Abort a running environment action (deploy, start, stop, etc.)
 bns environment abort --id <ENV_ID>

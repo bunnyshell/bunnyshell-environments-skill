@@ -160,11 +160,19 @@ Use `bns pipeline jobs --id <PIPELINE_ID>`, not `bns pipeline jobs <PIPELINE_ID>
 `bns environments deploy --output json` returns "Error: only stylish format is supported when following pipelines". Deploy, stop, and start commands only support the default stylish output.
 
 ### `bns pipeline logs --failed` does not exist (pre-v0.26)
-The `--failed` flag was never valid. As of v0.26, use `--jobStatus` and `--stepStatus` instead:
+The `--failed` flag was never valid. As of v0.26, use `--job-status` and `--step-status` instead:
 ```bash
-bns pipeline logs --id <PIPELINE_ID> --jobStatus failed
-bns pipeline logs --id <PIPELINE_ID> --stepStatus failed
+bns pipeline logs --id <PIPELINE_ID> --job-status failed
+bns pipeline logs --id <PIPELINE_ID> --step-status failed
 ```
+
+The camelCase `--jobStatus` / `--stepStatus` are deprecated on `pipeline logs` but still
+work identically, printing `Flag --stepStatus has been deprecated, use --step-status`.
+
+### `bns pipeline jobs --job-status` fails with "unknown flag"
+The camelCase-to-kebab-case rename landed on `pipeline logs` only. `bns pipeline jobs` still
+takes `--jobStatus`, and rejects `--job-status` outright. Don't blanket-replace the spelling
+across both subcommands. (Verified against v0.26.1.)
 
 ### `bns environments list` paginates interactively
 

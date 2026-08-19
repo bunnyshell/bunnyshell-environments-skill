@@ -266,13 +266,17 @@ bns environment abort --id <ENV_ID>
 bns pipeline logs --id <PIPELINE_ID>
 
 # Only logs from failed jobs (v0.26+)
-bns pipeline logs --id <PIPELINE_ID> --jobStatus failed
+bns pipeline logs --id <PIPELINE_ID> --job-status failed
 
 # Only failed steps within all jobs (v0.26+)
-bns pipeline logs --id <PIPELINE_ID> --stepStatus failed
+bns pipeline logs --id <PIPELINE_ID> --step-status failed
 
 # Both: failed jobs AND failed steps only
-bns pipeline logs --id <PIPELINE_ID> --jobStatus failed --stepStatus failed
+bns pipeline logs --id <PIPELINE_ID> --job-status failed --step-status failed
+
+# The camelCase spellings --jobStatus / --stepStatus are deprecated on this
+# subcommand. They still work identically, but print a deprecation warning.
+# Note: `bns pipeline jobs` still uses camelCase --jobStatus (see references/cli.md).
 
 # View logs for a specific job directly
 bns pipeline logs --id <PIPELINE_ID> --job <JOB_ID>
