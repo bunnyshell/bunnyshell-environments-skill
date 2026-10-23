@@ -5,11 +5,15 @@ scripts: `GenericComponent`, `Terraform`, `Helm`, `KubernetesManifest`.
 
 ## TL;DR
 
-- Scripts do **not** run inside the environment. Each script run is a one-off Pod on a
-  **separate jobs cluster** (Bunnyshell-managed by default), in its own throwaway namespace.
-- The runner **cannot reach the environment's pods or services** by Kubernetes DNS
-  (`my-service`, `my-service.env-abc123.svc.cluster.local`): it is a different cluster, and
-  private-IP egress is blocked. Use a **public hostname** (the component's ingress) instead.
+- Scripts do **not** run inside the environment. Each script run is a one-off Pod in its own
+  throwaway namespace, on the **runner cluster**: the Bunnyshell-managed jobs cluster by default,
+  or a self-hosted cluster if the project/environment is configured with one.
+- With the **managed runner** (the default), the runner **cannot reach the environment's pods or
+  services** by Kubernetes DNS (`my-service`, `my-service.env-abc123.svc.cluster.local`): it is a
+  different cluster, and private-IP egress is blocked. Even on a self-hosted runner, short names
+  like `my-service` never resolve (different namespace).
+- To work with a private in-environment service, run the work **inside the environment's
+  namespace** (see [Networking](#networking)) instead of exposing the service publicly.
 - `Helm` and `KubernetesManifest` runners get a **kubeconfig for the environment's cluster**
   (`KUBECONFIG` is set), so `kubectl`/`helm` work against it. `GenericComponent` and
   `Terraform` runners do **not**.
@@ -40,28 +44,37 @@ Per run, Bunnyshell creates:
 
 ## Networking
 
-On the managed jobs cluster, network policies allow egress **only to public IPs**
+**Managed runner (default):** network policies allow egress **only to public IPs**
 (RFC1918 ranges 10/8, 172.16/12, 192.168/16 and the cloud metadata IP are blocked).
 
-| Runner wants to reach | Works? | How |
+| Managed runner wants to reach | Works? | How |
 |---|---|---|
 | Public internet / cloud APIs (AWS, GCP, Azure, registries) | Yes | directly |
 | An env component via its public ingress host | Yes | `https://{{ components.<name>.ingress.hosts[0].hostname }}` (component must declare `hosts:`) |
 | An env component by service DNS / cluster IP | **No** | different cluster + private egress blocked |
-| Env cluster's Kubernetes API (Helm / KubernetesManifest) | Yes | injected `KUBECONFIG`; `kubectl exec` / `port-forward` also work |
-| Env cluster's Kubernetes API (GenericComponent / Terraform) | No kubeconfig provided | bring your own credentials via `environment` |
+| Env cluster's Kubernetes API (Helm / KubernetesManifest) | Yes | injected `KUBECONFIG` (`kubectl apply`/`exec`/`wait`) |
+| Env cluster's Kubernetes API (GenericComponent / Terraform) | No kubeconfig provided | prefer a KubernetesManifest/Helm component instead (see below) |
 
-If a step must talk to a **private** in-environment service (e.g. seeding a DB, configuring an
-emulator such as Azurite/LocalStack/MinIO), choose one of:
+**Self-hosted runner:** Bunnyshell applies no egress policies; what is reachable depends on the
+customer's own network and policies. If it is the environment's own cluster, in-cluster DNS can
+work but must be namespace-qualified (`my-service.{{ env.k8s.namespace }}.svc.cluster.local`),
+because the runner is in its own namespace.
 
-1. Expose it on an ingress host and use that hostname from the runner (simplest).
-2. Do the work **inside the environment** instead: an `InitContainer`/`SidecarContainer`, a
-   container command/entrypoint, or a small `Application`/`Service` component that runs the
-   setup and then sleeps.
-3. Use a `KubernetesManifest`/`Helm` component (gets a kubeconfig) and run
-   `kubectl exec`/`kubectl port-forward` against the target pod.
-4. Configure a self-hosted runner on the environment's own cluster (no network policies are
-   applied there, so service DNS resolves). This is a project/environment setting, not a YAML key.
+If a step must talk to a **private** in-environment service (seeding a DB, configuring an
+emulator such as Azurite/LocalStack/MinIO), prefer, in this order:
+
+1. **Run the work inside the environment's namespace** from a `KubernetesManifest` component:
+   it gets the env cluster's kubeconfig, so it can `kubectl apply` a one-off `Job` (or
+   `kubectl exec` into the target pod) where `my-service:port` resolves. See the example below.
+2. Do it from the workload itself: an `InitContainer`/`SidecarContainer` or the container's own
+   entrypoint/command.
+3. Only if the service is meant to be public anyway: call its ingress host from the runner.
+   Do **not** expose a private data service (databases, emulators with default/well-known
+   keys) just so a runner can reach it; if unavoidable, restrict the host with `allowedIps`
+   and use non-default credentials.
+
+Avoid `kubectl port-forward` in steps: it blocks until killed, so a bare one hangs the step
+until the runner timeout. If you must, background it, wait for readiness, and `kill` it.
 
 ## Inside the runner container
 
@@ -142,34 +155,63 @@ or the job in the UI), and the full log is stored after the run ("runner job res
 The runner namespace is short-lived, so `kubectl` on the environment's cluster will **not** find
 the runner pod.
 
-## Example: configure a private emulator from a GenericComponent
+## Example: configure a private emulator (Azurite CORS) from inside the environment
 
-Wrong (service DNS from the runner never resolves):
+Wrong: a `GenericComponent` using `http://azurite:10000` (managed runner: never resolves), or
+exposing Azurite publicly with its well-known dev key just so the runner can reach it.
+
+Right: a repo-less `KubernetesManifest` component launches a one-off `Job` in the environment
+namespace, where `azurite:10000` resolves, waits for it, and does the same on `start` because
+`deploy` does not re-run then. The Job's own retries (`backoffLimit`) cover Azurite still
+starting up.
 
 ```yaml
-environment:
-  AZURITE_CONNECTION_STRING: '...;BlobEndpoint=http://azurite:10000/devstoreaccount1;'
-```
-
-Right: expose the emulator on an ingress host, call it by that host, and re-apply on start:
-
-```yaml
-- kind: GenericComponent
+- kind: KubernetesManifest
   name: azurite-cors-init
-  runnerImage: mcr.microsoft.com/azure-cli:latest
+  runnerImage: 'alpine/k8s:1.31.0'
   dependsOn: [azurite]
-  environment:
-    AZURITE_CONNECTION_STRING: 'DefaultEndpointsProtocol=https;AccountName=devstoreaccount1;AccountKey=<azurite-dev-key>;BlobEndpoint=https://{{ components.azurite.ingress.hosts[0].hostname }}/devstoreaccount1;'
-  deploy:
+  deploy: &cors_steps
     - |
-      az storage cors clear --services b --connection-string "$AZURITE_CONNECTION_STRING" --only-show-errors &&
-      az storage cors add --services b --origins "https://app-{{ env.unique }}.example.com" \
-        --methods GET HEAD POST PUT DELETE OPTIONS --allowed-headers '*' --exposed-headers '*' \
-        --max-age 3600 --connection-string "$AZURITE_CONNECTION_STRING" --only-show-errors &&
-      az storage cors list --services b --connection-string "$AZURITE_CONNECTION_STRING" -o table
-  start:
+      cat <<'EOF' > job.yml
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: azurite-cors-init
+      spec:
+        backoffLimit: 10
+        ttlSecondsAfterFinished: 600
+        template:
+          spec:
+            restartPolicy: OnFailure
+            containers:
+              - name: az
+                image: mcr.microsoft.com/azure-cli:2.67.0
+                env:
+                  - name: CS
+                    # Azurite's documented local-dev account; only reachable inside the namespace
+                    value: 'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;'
+                command: ['sh', '-ec']
+                args:
+                  - |
+                    az storage cors clear --services b --connection-string "$CS" --only-show-errors
+                    az storage cors add --services b --origins 'https://app-{{ env.unique }}.example.com' \
+                      --methods GET HEAD POST PUT DELETE OPTIONS --allowed-headers '*' --exposed-headers '*' \
+                      --max-age 3600 --connection-string "$CS" --only-show-errors
+                    az storage cors list --services b --connection-string "$CS" -o table
+      EOF
+    - 'kubectl delete job azurite-cors-init --ignore-not-found'
+    - 'kubectl apply -f job.yml'
     - |
-      # same script as deploy: the emulator may have lost its settings while stopped
+      kubectl wait --for=condition=complete --timeout=600s job/azurite-cors-init
+      rc=$?
+      kubectl logs job/azurite-cors-init --tail=50
+      [ "$rc" -eq 0 ]
+  start: *cors_steps   # Azurite without a volume loses CORS while stopped; deploy doesn't re-run on start
+  destroy:
+    - 'kubectl delete job azurite-cors-init --ignore-not-found'
 ```
 
-If the emulator must stay private, move the setup into the environment (see "Networking" above).
+Notes: YAML anchors/aliases (`&cors_steps` / `*cors_steps`) are supported; Bunnyshell expands
+them when parsing, so an exported definition shows the steps repeated. The kubeconfig's default namespace is the environment's, so no `-n` is needed. The last
+step ends with `[ "$rc" -eq 0 ]` so the step fails when the Job does, while still printing its logs.
+Pin image versions you have tested.

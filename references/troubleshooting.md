@@ -33,12 +33,14 @@ _(This guide is actively updated as issues are encountered)_
 Full model: [runners.md](runners.md).
 
 ### Script can't reach an env service (`connection refused`, `could not resolve host my-service`), or retries forever and "does nothing"
-The script runs in a runner Pod on a **separate jobs cluster**, not in the environment's
-namespace, and private-IP egress is blocked. `my-service`, `my-service:port` and
-`my-service.<ns>.svc.cluster.local` never resolve from there.
-- Call the service through its public ingress host: `{{ components.<name>.ingress.hosts[0].hostname }}`.
-- Or move the work into the environment (init/sidecar container, or a small component that runs the setup).
-- Helm/KubernetesManifest only: use the injected kubeconfig (`kubectl exec` / `port-forward`).
+The script runs in a runner Pod outside the environment's namespace. With the default
+**managed runner** it is on a separate jobs cluster with private-IP egress blocked, so
+`my-service`, `my-service:port` and `my-service.<ns>.svc.cluster.local` never resolve.
+- Preferred: run the work inside the env namespace from a `KubernetesManifest` component
+  (injected kubeconfig → `kubectl apply` a one-off `Job`, or `kubectl exec`). Example in runners.md.
+- Or do it from the workload itself (init/sidecar container, entrypoint).
+- Use the public ingress host only for services that are meant to be public; don't expose a
+  private data service just for the runner.
 - Remove `2>/dev/null` from probes while debugging; it hides the real error from the pipeline logs.
 
 ### Works after deploy, lost after the environment is stopped and started
@@ -46,7 +48,8 @@ namespace, and private-IP egress is blocked. `my-service`, `my-service:port` and
 
 ### `kubectl` in a GenericComponent says "connection refused localhost:8080" / no context
 GenericComponent and Terraform runners get no kubeconfig. Use a KubernetesManifest/Helm
-component, or pass your own cluster credentials via `environment`.
+component, which gets one for the env cluster. If you really must pass your own credentials,
+use a least-privilege, encrypted (`SECRET[...]`) value and never print it in step output.
 
 ### `parameter not set` / `unbound variable` errors, or a multi-line step "succeeds" despite an earlier failure
 Steps are sourced in one `/bin/sh` with `set -u` and without `set -e`: unset vars are fatal,
