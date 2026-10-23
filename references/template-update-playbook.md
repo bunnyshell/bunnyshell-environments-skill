@@ -161,5 +161,5 @@ This waits for completion and prints endpoints when done.
 - **ttyd not in apt**: The `ttyd` web terminal package is not in Debian bookworm repos. Install binary from GitHub releases (see [troubleshooting.md](troubleshooting.md#web-terminal-ttyd-setup))
 - **Go version mismatches**: Always check `go.mod` requirements before using `go install` in multi-stage Dockerfiles
 - **Always local build first**: Run `docker build --platform linux/amd64` locally before deploying to catch build errors early
-- **`gitRepo` must be remote**: `--from-path` reads YAML locally but the `gitRepo` field must point to an accessible remote Git repo (Bunnyshell pulls source remotely to build)
+- **`gitRepo` must be remote when set**: `--from-path` reads YAML locally, but any component that builds from source (Application/Service with `build`, `DockerImage`, `GenericComponent`) needs `gitRepo` pointing to an accessible remote Git repo (Bunnyshell pulls source remotely to build). Repository-less `KubernetesManifest` components and `Helm` charts installed from a registry need no `gitRepo`
 - **Component URLs**: Public URLs only appear in `bns components show --id <ID>`, not in list output

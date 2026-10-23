@@ -385,7 +385,8 @@ components:
 
 ```yaml
 environmentVariables:
-  DATABASE_URL: 'postgres://{{ env.vars.DB_USER }}:{{ env.vars.DB_PASS }}@{{ components.postgres.exported.HOST }}:5432/{{ env.vars.DB_NAME }}'
+  # `postgres` = the database component's name, which is its in-namespace service DNS name
+  DATABASE_URL: 'postgres://{{ env.vars.DB_USER }}:{{ env.vars.DB_PASS }}@postgres:5432/{{ env.vars.DB_NAME }}'
 ```
 
 ### Conditional Replicas
@@ -413,8 +414,8 @@ components:
     name: rds
     exportVariables: [DB_HOST, DB_PORT]
     deploy:
-      - 'DB_HOST=terraform output --raw endpoint'
-      - 'DB_PORT=terraform output --raw port'
+      - 'DB_HOST=$(terraform output --raw endpoint)'
+      - 'DB_PORT=$(terraform output --raw port)'
 
   - kind: Application
     name: api

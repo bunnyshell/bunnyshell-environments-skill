@@ -33,7 +33,7 @@ Last verified: 2026-02-14
 |---|---|---|
 | Terraform | `hashicorp/terraform:1.9` | Latest 1.x line |
 | Helm/kubectl | `dtzar/helm-kubectl:3.16` | Latest Helm 3 |
-| Kubernetes tools | `alpine/k8s:1.31` | Match current K8s stable |
+| Kubernetes tools | `alpine/k8s:1.31.0` | Match current K8s stable. alpine/k8s publishes full versions only (no `1.31` tag) |
 
 ## Email Testing
 

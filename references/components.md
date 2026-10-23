@@ -121,7 +121,7 @@ own. Files created in one `deploy:` step persist for later steps.
 ```yaml
 - kind: KubernetesManifest
   name: my-resources
-  runnerImage: 'alpine/k8s:1.29.2'
+  runnerImage: 'alpine/k8s:1.31.0'
   deploy:
     - |
       cat <<'EOF' > manifest.yml
@@ -170,7 +170,7 @@ Capture state for UI:
 
 ```yaml
 deploy:
-  - 'BNS_TF_STATE_LIST=terraform show -json'
+  - 'BNS_TF_STATE_LIST=$(terraform show -json)'
 ```
 
 ## Docker Compose Key Support
@@ -234,13 +234,14 @@ rather than assuming a key took effect.
 
 ## Runner Images
 
-Recommended images for script-based components:
+Recommended images for script-based components (Helm/Kubernetes/Terraform pins are kept in
+[image-versions.md](image-versions.md#runner-images); pin versions you have tested):
 
 | Use Case | Image |
 |----------|-------|
-| Helm | `dtzar/helm-kubectl:3.8.2` |
-| Kubernetes | `alpine/k8s:1.22.15` |
-| Terraform | `hashicorp/terraform:1.5.1` |
+| Helm | `dtzar/helm-kubectl:3.16` |
+| Kubernetes | `alpine/k8s:1.31.0` |
+| Terraform | `hashicorp/terraform:1.9` |
 | AWS CLI | `amazon/aws-cli:latest` |
 | GCloud | `google/cloud-sdk:alpine` |
 | Azure | `mcr.microsoft.com/azure-cli:latest` |
@@ -254,6 +255,8 @@ Use `@self` to run scripts in the component's own built image:
 - kind: GenericComponent
   name: my-component
   runnerImage: '@self'
+  gitRepo: 'https://github.com/org/my-component.git'   # the build context comes from this repo
+  gitBranch: main
   dockerCompose:
     build:
       context: .
