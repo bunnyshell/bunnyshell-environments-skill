@@ -28,6 +28,14 @@ Components with `runnerImage` support lifecycle scripts:
 | `start` | On start | Resume stopped environment |
 | `stop` | On stop | Pause environment, preserve data |
 
+`deploy` re-runs on every deploy, but **not** on environment start; only `start` does.
+
+**Scripts run in a separate runner Pod on a jobs cluster, not inside the environment.** They
+cannot reach env services by Kubernetes DNS (`my-service:port`); use the component's public
+ingress host. Only Helm/KubernetesManifest runners get a kubeconfig for the env cluster. Steps
+are sourced in one `/bin/sh` with `set -u` (no `set -e`, bash-isms break). See
+[runners.md](runners.md) for the full execution model.
+
 ## Component Dependencies
 
 Control execution order with `dependsOn`:
@@ -68,8 +76,8 @@ Components can export variables for other components:
     - DB_HOST
     - DB_PORT
   deploy:
-    - 'DB_HOST=terraform output --raw host'
-    - 'DB_PORT=terraform output --raw port'
+    - 'DB_HOST=$(terraform output --raw host)'
+    - 'DB_PORT=$(terraform output --raw port)'
 
 # Application using exported variables
 - kind: Application

@@ -103,6 +103,7 @@ bunnyshell-environments/
     ├── api.md            # REST API documentation
     ├── yaml-schema.md    # bunnyshell.yaml configuration schema
     ├── components.md     # Component types (Helm, Terraform, etc.)
+    ├── runners.md        # Where/how runner scripts execute (jobs cluster, networking)
     └── variables.md      # Variables and interpolation syntax
 ```
 

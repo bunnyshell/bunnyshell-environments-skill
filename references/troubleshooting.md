@@ -28,6 +28,31 @@ _(This guide is actively updated as issues are encountered)_
 - Verify image tag exists: check Docker Hub directly
 - For rate limits: configure `imagePullSecrets` in the cluster
 
+## Runner scripts (GenericComponent / Terraform / Helm / KubernetesManifest)
+
+Full model: [runners.md](runners.md).
+
+### Script can't reach an env service (`connection refused`, `could not resolve host my-service`), or retries forever and "does nothing"
+The script runs in a runner Pod on a **separate jobs cluster**, not in the environment's
+namespace, and private-IP egress is blocked. `my-service`, `my-service:port` and
+`my-service.<ns>.svc.cluster.local` never resolve from there.
+- Call the service through its public ingress host: `{{ components.<name>.ingress.hosts[0].hostname }}`.
+- Or move the work into the environment (init/sidecar container, or a small component that runs the setup).
+- Helm/KubernetesManifest only: use the injected kubeconfig (`kubectl exec` / `port-forward`).
+- Remove `2>/dev/null` from probes while debugging; it hides the real error from the pipeline logs.
+
+### Works after deploy, lost after the environment is stopped and started
+`deploy` does not run on start. Put the same idempotent script under `start:`.
+
+### `kubectl` in a GenericComponent says "connection refused localhost:8080" / no context
+GenericComponent and Terraform runners get no kubeconfig. Use a KubernetesManifest/Helm
+component, or pass your own cluster credentials via `environment`.
+
+### `parameter not set` / `unbound variable` errors, or a multi-line step "succeeds" despite an earlier failure
+Steps are sourced in one `/bin/sh` with `set -u` and without `set -e`: unset vars are fatal,
+and only a step's last command decides success. Use `${VAR:-}`, chain with `&&`, or add `set -e`.
+Bash-only syntax (`[[ ]]`, arrays, `pipefail`) fails under `sh`.
+
 ## Database Connection Issues
 
 ### PostgreSQL password change not taking effect
