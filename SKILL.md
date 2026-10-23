@@ -17,13 +17,16 @@ Manage cloud environments using the Bunnyshell platform via the `bns` CLI.
 
 **Authenticate via environment variable (recommended):**
 ```bash
-export BUNNYSHELL_TOKEN=YOUR_TOKEN
+# Load the token from a secret store or a chmod 600 file; never type the literal token
+# into a command (shell history, `ps`) or echo it into agent/tool output
+export BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/token)"
 bns environments list
 ```
 
 **Alternative — persistent profile (interactive terminal only):**
 ```bash
-bns configure profiles add --name default --token YOUR_TOKEN --default
+# Omit --token: the CLI prompts for it, keeping it out of shell history
+bns configure profiles add --name default --default
 ```
 
 **Warning:** `bns configure profiles add` prompts interactively and will hang in non-interactive/scripting contexts. Prefer `export BUNNYSHELL_TOKEN` when automating.
@@ -49,11 +52,11 @@ A PAT can carry the same permissions as its creator or fewer — never more. An 
 **Used exactly like the account-wide token** — no different header or flag:
 
 ```bash
-export BUNNYSHELL_TOKEN=YOUR_PAT
+export BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/pat)"
 bns environments list
 
-# or per-command
-bns environments list --token YOUR_PAT
+# or per-command (from a variable, never a literal token)
+bns environments list --token "$BUNNYSHELL_PAT"
 ```
 
 **Why this matters:** an account-wide token can see *every* organization its user belongs to, so a misloaded token operates successfully against the **wrong organization's** environments. The failure mode is not an auth error — it is commands quietly succeeding against the wrong client. Scoping a PAT to one organization makes that mistake impossible rather than merely detectable after the fact.
@@ -317,15 +320,15 @@ bns remote-development down
 bns variables import --vars-file=/path/to/vars.env
 bns variables import --secrets-file=/path/to/secrets.env
 
-# Encrypt a secret (positional argument — preferred)
-bns secrets encrypt "my-secret" --organization <ORG_ID>
+# Encrypt a secret: pipe it via stdin from a variable (preferred). A positional argument
+# (`bns secrets encrypt "value"`) works too, but puts the plaintext in argv and shell history.
+printf '%s' "$DB_PASSWORD" | bns secrets encrypt --organization <ORG_ID>
+# WARNING: stdin is read verbatim. `echo "$VAR" |` adds a newline to the value,
+# causing subtle auth failures (e.g., password becomes "secret\n" not "secret").
+# `echo -n` is not portable; use printf '%s'.
 
-# Encrypt via stdin (use echo -n to avoid trailing newline!)
-echo -n "my-secret-value" | bns secrets encrypt --organization <ORG_ID>
-# WARNING: `echo` (without -n) adds a newline to the value,
-# causing subtle auth failures (e.g., password becomes "secret\n" not "secret")
-
-# Decrypt a secret
+# Decrypt a secret: only when the user explicitly asks for it. Agents/CI must not decrypt
+# secrets or print plaintext into logs, chat, or files.
 bns secrets decrypt "ENCRYPTED[...]" --organization <ORG_ID>
 
 # Encrypt entire definition file
@@ -522,10 +525,9 @@ bns k8s list --output json | jq '._embedded.item[] | {id, clusterName, status}'
 # 3. Get the organization ID (needed for encrypting secrets)
 bns projects show --id <PROJECT_ID> --output json | jq -r '.organization'
 
-# 4. Encrypt any secrets for bunnyshell.yaml
-bns secrets encrypt "my-secret-value" --organization <ORG_ID>
+# 4. Encrypt any secrets for bunnyshell.yaml (value comes from a variable, not argv)
+printf '%s' "$MY_SECRET" | bns secrets encrypt --organization <ORG_ID>
 # Returns: ENCRYPTED[...] — use this DIRECTLY in bunnyshell.yaml (do NOT wrap in SECRET[])
-# For stdin piping: echo -n "value" | bns secrets encrypt --organization <ORG_ID>
 
 # 5. Create the environment from a local bunnyshell.yaml
 bns environments create \

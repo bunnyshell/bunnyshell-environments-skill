@@ -27,10 +27,10 @@ Claude autonomously decides when to use this skill based on your environment man
 Configure the CLI:
 
 ```bash
-export BUNNYSHELL_TOKEN=YOUR_TOKEN   # recommended, works for both token types
+export BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/token)"   # recommended, works for both token types; keep the literal token out of shell history
 
-# or a persistent profile (interactive terminals only)
-bns configure profiles add --name default --token YOUR_TOKEN --default
+# or a persistent profile (interactive terminals only; prompts for the token)
+bns configure profiles add --name default --default
 ```
 
 ## Installation

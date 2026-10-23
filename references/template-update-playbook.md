@@ -79,8 +79,8 @@ mailhog is abandoned. Mailpit is the active successor and is a drop-in replaceme
 ## Verified Deploy-Test Workflow
 
 ```bash
-# Source environment variables
-source .env
+# Load environment variables (POSIX `.`; `source` is bash-only). Keep .env out of git
+. ./.env
 
 # Create environment from local config
 bns environments create \
@@ -113,14 +113,17 @@ bns environments delete --id <ENV_ID> --no-wait
 
 When templates need different security or config between the committed version and live deployments:
 
-1. Commit templates with open defaults (e.g., `allowedIps: 0.0.0.0/0`)
-2. Create a temp copy with overrides for deployment:
+1. Commit templates **fail-closed**: never default to `allowedIps: 0.0.0.0/0`. Use a placeholder
+   that matches no client, e.g. `allowedIps: ['127.0.0.1/32']` (`allowedIps` is not interpolated,
+   so it cannot come from a template variable; it must be a literal IP/CIDR)
+2. At deploy time, write the real allowlist (an explicit, minimal CIDR list) into a temp copy:
    ```bash
-   cp bunnyshell.yaml /tmp/deploy.yaml
-   sed -i 's|0.0.0.0/0|185.181.102.37/32|' /tmp/deploy.yaml
+   sed 's|127.0.0.1/32|<YOUR_IP>/32|' bunnyshell.yaml > /tmp/deploy.yaml
+   grep -n -A3 'allowedIps' /tmp/deploy.yaml   # verify before applying
    bns environments update-configuration --id <ENV_ID> --from-path /tmp/deploy.yaml --deploy
    ```
-3. This keeps templates reusable while allowing per-deployment restrictions
+3. This keeps templates reusable while every deployment starts restricted. Hosts that must be
+   public need an explicit `public: true`
 
 ## Efficient Multi-Environment Deploy
 

@@ -229,13 +229,10 @@ while true; do
   STATUS=$(curl -s -X GET "https://api.environments.bunnyshell.com/v1/environments/$ENV_ID" \
     -H "Authorization: Bearer $TOKEN" | jq -r '.operationStatus')
   
-  if [[ "$STATUS" == "running" ]]; then
-    echo "Deploy complete"
-    break
-  elif [[ "$STATUS" == *"failed"* ]]; then
-    echo "Deploy failed"
-    exit 1
-  fi
+  case "$STATUS" in
+    running)  echo "Deploy complete"; break ;;
+    *failed*) echo "Deploy failed"; exit 1 ;;
+  esac
   
   sleep 10
 done

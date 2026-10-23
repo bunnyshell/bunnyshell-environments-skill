@@ -65,10 +65,20 @@ Bash-only syntax (`[[ ]]`, arrays, `pipefail`) fails under `sh`.
 
 **Cause:** PostgreSQL only reads `POSTGRES_PASSWORD` on first initialization (when the data directory is empty). The password is persisted in the volume. Subsequent env var changes are ignored.
 
-**Fix:** Delete the environment and recreate it (to destroy the PG volume), or exec into the PG container and change the password manually:
+**Fix (preferred, keeps data):** change the password inside PostgreSQL, then set `POSTGRES_PASSWORD`
+(and the app's DB password) to the same value. Use psql's interactive `\password` so the new
+password never appears in argv, shell history, or logs:
 ```bash
-bns exec <PG_COMPONENT_ID> -c <CONTAINER_NAME> -- psql -U postgres -c "ALTER USER myuser PASSWORD 'newpassword'"
+bns exec <PG_COMPONENT_ID> -c <CONTAINER_NAME> --tty --stdin -- psql -U postgres
+# at the psql prompt:
+#   \password myuser
 ```
+
+**Destructive alternative (wipes all data):** deleting and recreating the environment destroys
+the PG volume. Only do this after (1) confirming the exact environment
+(`bns environments show --id <ENV_ID>`), (2) taking a backup if any data matters
+(`bns exec <PG_COMPONENT_ID> -c <CONTAINER_NAME> -- pg_dump -U postgres <DB> > backup.sql`), and
+(3) getting explicit confirmation from the user.
 
 **Note:** This applies to all PostgreSQL Docker images (official, Bitnami, etc.) that use a persistent volume for `/var/lib/postgresql/data`.
 
@@ -273,16 +283,24 @@ RUN wget -qO /usr/local/bin/ttyd https://github.com/tsl0922/ttyd/releases/downlo
 ```
 
 ### Basic Authentication
-Use the `-c` flag for HTTP basic auth:
+A web terminal is a shell in the container; never publish one with shared or default
+credentials. Use the `-c` flag for HTTP basic auth:
 ```dockerfile
 CMD ["sh", "-c", "ttyd -W -c ${TTYD_USER}:${TTYD_PASS} bash"]
 ```
-Pass credentials via environment variables in `bunnyshell.yaml`:
+Generate a per-environment password, keep it in a password manager, and store only the
+encrypted value:
+```bash
+TTYD_PASS=$(openssl rand -base64 24)    # save it to your password manager
+printf '%s' "$TTYD_PASS" | bns secrets encrypt --organization <ORG_ID>   # -> ENCRYPTED[...]
+```
 ```yaml
 environmentVariables:
-    TTYD_USER: 'admin'
-    TTYD_PASS: 'changeme'
+    TTYD_USER: 'dev'
+    TTYD_PASS: ENCRYPTED[...]   # output of the command above
 ```
+Also restrict the terminal host to known IPs with `security.access.allowedIps` (see
+[yaml-schema.md](yaml-schema.md#ip-restrictions)) and keep `public: false` on it.
 
 ### Port
 ttyd defaults to port 7681. Expose it in the Dockerfile and map it in `bunnyshell.yaml`:

@@ -16,10 +16,11 @@
 ## Configuration & Profiles
 
 ```bash
-# Add profile
+# Add profile (interactive: omit --token to be prompted; scripted: pass it from a variable,
+# never a literal token)
 bns configure profiles add \
   --name <NAME> \
-  --token <TOKEN> \
+  --token "$BUNNYSHELL_TOKEN" \
   --default \
   --organization <ORG_ID> \
   --project <PROJECT_ID> \
@@ -179,7 +180,7 @@ bns k8s-clusters show --id <CLUSTER_ID>
 # Environment variables
 bns variables list --environment <ENV_ID>
 bns variables show --id <VAR_ID>
-bns variables create --environment <ENV_ID> --name KEY --value VALUE
+bns variables create --environment <ENV_ID> --name KEY --value VALUE   # non-secret values; for secrets prefer import --secrets-file (chmod 600, not in git)
 bns variables edit --id <VAR_ID> --value NEW_VALUE
 bns variables edit --id <VAR_ID> --secret              # Mark as secret
 bns variables delete --id <VAR_ID>
@@ -207,13 +208,18 @@ bns project-variables delete --id <VAR_ID>
 ## Secrets
 
 ```bash
-# Encrypt/decrypt standalone values
-bns secrets encrypt "my password" --organization <ORG_ID>
-cat mysecret.txt | bns secrets encrypt --organization <ORG_ID>
-bns secrets decrypt "ENCRYPTED[...]" --organization <ORG_ID>
+# Encrypt standalone values: via stdin, so the plaintext stays out of argv/shell history
+# (stdin is read verbatim, so printf '%s' to avoid a trailing newline)
+printf '%s' "$MY_SECRET" | bns secrets encrypt --organization <ORG_ID>
+bns secrets encrypt --organization <ORG_ID> < mysecret.txt    # file without trailing newline
+bns secrets encrypt "my password" --organization <ORG_ID>     # works, but exposes the value in argv/history
 
-# Encrypt/decrypt definition files
+# Encrypt definition files
 bns secrets encrypt-definition --file bunnyshell.yaml --organization <ORG_ID>
+
+# Decrypt: only when the user explicitly asks. The output is plaintext; do not print it into
+# agent/CI logs or write it to tracked files
+bns secrets decrypt "ENCRYPTED[...]" --organization <ORG_ID>
 bns secrets decrypt-definition --file bunnyshell.yaml --organization <ORG_ID>
 bns secrets decrypt-definition --file bunnyshell.yaml --resolved --organization <ORG_ID>
 ```

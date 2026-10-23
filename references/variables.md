@@ -26,8 +26,10 @@ pods by environment variable will not match on anything set this way.
 ```bash
 # what an admission webhook can see
 kubectl get pod <pod> -o jsonpath='{.spec.containers[0].env}'
-# where the component's variables actually are
-kubectl get cm env-file-<component> -o jsonpath='{.data}'
+# where the component's variables actually are. The ConfigMap also holds decrypted secret
+# values, so list the keys and read only specific non-secret ones; never dump all of .data
+kubectl get cm env-file-<component> -o json | jq -r '.data | keys[]'
+kubectl get cm env-file-<component> -o jsonpath='{.data.SOME_NON_SECRET_KEY}'
 ```
 
 See `troubleshooting.md` -> "An operator's admission webhook doesn't see my configuration".
@@ -73,14 +75,16 @@ DB_PASSWORD: ENCRYPTED[bXktcGFzc3dvcmQ...]
 DB_PASSWORD: SECRET["ENCRYPTED[bXktcGFzc3dvcmQ...]"]  # CORRUPTED!
 ```
 
-**When encrypting via stdin, use `echo -n` to avoid trailing newlines:**
+**When encrypting via stdin, use `printf '%s'` to avoid trailing newlines** (stdin is read
+verbatim; `echo -n` is not portable). Pipe from a variable rather than a literal, so the
+plaintext stays out of shell history:
 
 ```bash
 # CORRECT
-echo -n "my-password" | bns secrets encrypt --organization <ORG_ID>
+printf '%s' "$DB_PASSWORD" | bns secrets encrypt --organization <ORG_ID>
 
 # WRONG — encrypts "my-password\n" (with newline), causing auth failures
-echo "my-password" | bns secrets encrypt --organization <ORG_ID>
+echo "$DB_PASSWORD" | bns secrets encrypt --organization <ORG_ID>
 ```
 
 ### Where SECRET[] Works
