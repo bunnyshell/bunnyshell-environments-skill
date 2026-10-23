@@ -83,8 +83,8 @@ bns environments create \
   --project <PROJECT_ID> \
   --k8s <CLUSTER_ID>
 
-# Deploy environment (wait for completion)
-bns environments deploy --id <ENV_ID> --wait
+# Deploy environment (waits for the pipeline to finish by default; there is no --wait flag)
+bns environments deploy --id <ENV_ID>
 
 # Deploy environment (non-blocking)
 # Note: --output json is NOT supported with deploy/stop/start commands
@@ -92,10 +92,10 @@ bns environments deploy --id <ENV_ID> --wait
 bns environments deploy --id <ENV_ID> --no-wait
 
 # Stop environment (scale down, preserve data)
-bns environments stop --id <ENV_ID> --wait
+bns environments stop --id <ENV_ID>
 
 # Start environment (resume from stopped)
-bns environments start --id <ENV_ID> --wait
+bns environments start --id <ENV_ID>
 
 # Abort a running action (deploy, start, stop, etc.) (v0.26+)
 bns environment abort --id <ENV_ID>
@@ -107,7 +107,7 @@ bns environments delete --id <ENV_ID>
 bns environments clone --id <ENV_ID> --name "Cloned Env"
 
 # Export configuration (get current YAML definition)
-bns environments definition --id <ENV_ID> > bunnyshell.yaml
+bns environments definition --id <ENV_ID> -o raw > bunnyshell.yaml
 
 # Update configuration from local file
 bns environments update-configuration --id <ENV_ID> --from-path bunnyshell.yaml
@@ -314,8 +314,8 @@ bns remote-development down
 
 ```bash
 # Import variables
-bns variables import --var-file=/path/to/vars.env
-bns variables import --secret-file=/path/to/secrets.env
+bns variables import --vars-file=/path/to/vars.env
+bns variables import --secrets-file=/path/to/secrets.env
 
 # Encrypt a secret (positional argument — preferred)
 bns secrets encrypt "my-secret" --organization <ORG_ID>
@@ -464,7 +464,7 @@ Field names differ across resource types. Key fields to know:
 | Resource | Key Fields |
 |----------|-----------|
 | **Environments** | `id`, `name`, `operationStatus` (not `status`), `namespace`, `kubernetesIntegration` |
-| **Components** | `id`, `name`, `operationStatus`, `publicURLs` (not `endpoints`) |
+| **Components** | `id`, `name`, `operationStatus`, `clusterStatus`; `publicURLs` (not `endpoints`) only in `components show`, not in `components list` items |
 | **K8s Integrations** | `id`, `clusterName` (not `name`), `cloudProvider`, `status` |
 | **Projects** | `id`, `name`, `organization` |
 | **Pipelines** | `id`, `status`, `description` |
@@ -489,7 +489,7 @@ bns environments clone --id <SOURCE_ENV_ID> --name "new-environment"
 # Note the new environment ID from the output
 
 # 2. Export the new environment's configuration
-bns environments definition --id <NEW_ENV_ID> > new-env.yaml
+bns environments definition --id <NEW_ENV_ID> -o raw > new-env.yaml
 
 # 3. Edit new-env.yaml to customize:
 #    - Update environment variables
@@ -542,9 +542,10 @@ bns environments deploy --id <ENV_ID> --no-wait
 bns pipeline list --environment <ENV_ID>
 bns pipeline monitor --id <PIPELINE_ID>
 
-# 8. Get the public URL
-bns components list --environment <ENV_ID> --output json | \
-  jq -r '._embedded.item[] | "\(.name): \(.publicURLs[])"'
+# 8. Get the public URLs (list items have no publicURLs; show each component)
+for id in $(bns components list --environment <ENV_ID> --output json | jq -r '._embedded.item[].id'); do
+  bns components show --id "$id" --output json | jq -r '"\(.name): \((.publicURLs // []) | join(" "))"'
+done
 ```
 
 **Shortcut — update config and deploy in one step:**

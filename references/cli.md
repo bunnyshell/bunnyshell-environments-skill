@@ -78,14 +78,15 @@ bns environments create \
 bns environments clone --id <ENV_ID> --name "Cloned Env"
 
 # Lifecycle
-bns environments deploy --id <ENV_ID> --wait
-bns environments stop --id <ENV_ID> --wait
-bns environments start --id <ENV_ID> --wait
+# deploy/stop/start/delete wait for the pipeline by default; add --no-wait to return immediately
+bns environments deploy --id <ENV_ID>
+bns environments stop --id <ENV_ID>
+bns environments start --id <ENV_ID>
 bns environment abort --id <ENV_ID>            # Abort running action (v0.26+)
-bns environments delete --id <ENV_ID> --force
+bns environments delete --id <ENV_ID>          # Irreversible; confirm the exact env first (no --force flag)
 
 # Configuration (export/import)
-bns environments definition --id <ENV_ID> > bunnyshell.yaml
+bns environments definition --id <ENV_ID> -o raw > bunnyshell.yaml
 bns environments update-configuration --id <ENV_ID> --from-path bunnyshell.yaml
 
 # Settings
@@ -116,7 +117,7 @@ bns components port-forward --id <COMPONENT_ID> 8080:80
 **Note:** `bns components redeploy`, `delete`, `logs`, and `exec` do not exist. Use:
 - For redeployment: `bns environments deploy` or redeploy via web UI
 - For logs: `bns logs --component <COMPONENT_ID>` (top-level command)
-- For exec: `bns ssh --component <COMPONENT_ID> --shell "command"` or `kubectl exec`
+- For exec: `bns exec <COMPONENT_ID> -- <command>` (top-level command; see SKILL.md), or `bns ssh --component <COMPONENT_ID>` for an interactive shell
 
 ## Pipelines
 
@@ -184,9 +185,9 @@ bns variables edit --id <VAR_ID> --secret              # Mark as secret
 bns variables delete --id <VAR_ID>
 
 # Import from file
-bns variables import --var-file=/path/to/vars.env
-bns variables import --secret-file=/path/to/secrets.env
-bns variables import --var-file=vars.env --secret-file=secrets.env --ignore-duplicates
+bns variables import --vars-file=/path/to/vars.env
+bns variables import --secrets-file=/path/to/secrets.env
+bns variables import --vars-file=vars.env --secrets-file=secrets.env --ignore-duplicates
 ```
 
 **Note:** Use `bns variables edit` (not `update`) to modify existing variables.
