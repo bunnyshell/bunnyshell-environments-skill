@@ -28,6 +28,35 @@ _(This guide is actively updated as issues are encountered)_
 - Verify image tag exists: check Docker Hub directly
 - For rate limits: configure `imagePullSecrets` in the cluster
 
+## Runner scripts (GenericComponent / Terraform / Helm / KubernetesManifest)
+
+Full model: [runners.md](runners.md).
+
+### Script can't reach an env service (`connection refused`, `could not resolve host my-service`), or retries forever and "does nothing"
+The script runs in a runner Pod outside the environment's namespace. With the default
+**managed runner** it is on a separate jobs cluster with private-IP egress blocked, so
+`my-service`, `my-service:port` and `my-service.<ns>.svc.cluster.local` never resolve.
+- Preferred: run the work inside the env namespace from a `KubernetesManifest` component
+  (injected kubeconfig → `kubectl apply` a one-off `Job`, or `kubectl exec`). Example in runners.md.
+- Or do it from the workload itself (init/sidecar container, entrypoint).
+- Use the public ingress host only for services that are meant to be public; don't expose a
+  private data service just for the runner.
+- Remove `2>/dev/null` from probes while debugging; it hides the real error from the pipeline logs.
+
+### Works after deploy, lost after the environment is stopped and started
+`deploy` does not run on start. Put the same idempotent script under `start:`.
+
+### `kubectl` in a GenericComponent says "connection refused localhost:8080" / no context
+GenericComponent and Terraform runners get no kubeconfig. Use a KubernetesManifest/Helm
+component, which gets one for the env cluster. If you really must pass your own credentials,
+use a least-privilege credential stored pre-encrypted (`ENCRYPTED[...]` from `bns secrets encrypt`,
+never plaintext in a committed file) and never print it in step output.
+
+### `parameter not set` / `unbound variable` errors, or a multi-line step "succeeds" despite an earlier failure
+Steps are sourced in one `/bin/sh` with `set -u` and without `set -e`: unset vars are fatal,
+and only a step's last command decides success. Use `${VAR:-}`, chain with `&&`, or add `set -e`.
+Bash-only syntax (`[[ ]]`, arrays, `pipefail`) fails under `sh`.
+
 ## Database Connection Issues
 
 ### PostgreSQL password change not taking effect

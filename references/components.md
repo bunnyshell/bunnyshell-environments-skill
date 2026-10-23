@@ -12,7 +12,7 @@
 | `Helm` | Deploy Helm charts |
 | `KubernetesManifest` | Raw Kubernetes manifests |
 | `Terraform` | Infrastructure-as-code |
-| `GenericComponent` | Fully custom bash workflows |
+| `GenericComponent` | Fully custom shell workflows (POSIX `/bin/sh`) |
 | `CustomDockerImage` | Full control over image builds |
 | `InitContainer` | Initialization before main container |
 | `SidecarContainer` | Co-located helper container |
@@ -27,6 +27,16 @@ Components with `runnerImage` support lifecycle scripts:
 | `destroy` | On delete | Clean up resources |
 | `start` | On start | Resume stopped environment |
 | `stop` | On stop | Pause environment, preserve data |
+
+`deploy` re-runs on every deploy, but **not** on environment start; only `start` does.
+
+**Scripts run in a separate runner Pod (on the managed jobs cluster by default), not inside the
+environment.** With the managed runner they cannot reach env services by Kubernetes DNS
+(`my-service:port`). For private services, run the work inside the env namespace (e.g. a
+KubernetesManifest component applying a `Job`). Only Helm/KubernetesManifest runners get a
+kubeconfig for the env cluster. Steps are sourced in one POSIX `/bin/sh` with `set -u`
+(no `set -e`; bash-isms break). See
+[runners.md](runners.md) for the full execution model.
 
 ## Component Dependencies
 
@@ -68,8 +78,8 @@ Components can export variables for other components:
     - DB_HOST
     - DB_PORT
   deploy:
-    - 'DB_HOST=terraform output --raw host'
-    - 'DB_PORT=terraform output --raw port'
+    - 'DB_HOST=$(terraform output --raw host)'
+    - 'DB_PORT=$(terraform output --raw port)'
 
 # Application using exported variables
 - kind: Application

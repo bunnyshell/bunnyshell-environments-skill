@@ -573,6 +573,8 @@ curl -X POST "https://api.environments.bunnyshell.com/v1/environments/ENV_ID/dep
 | Component not found in UI | Ensure Helm uses `--post-renderer /bns/helpers/helm/bns_post_renderer` |
 | Variables not injecting | Check variable scope (project > environment > component) |
 | Blank page / mixed content errors | TLS terminates at ingress; app sees HTTP. Configure the framework to trust proxies (see below) |
+| Runner script (GenericComponent/Terraform/Helm/KubernetesManifest) "does nothing" or can't reach `my-service:port` | Runner scripts don't run in the env; with the default managed runner they're on a **separate jobs cluster** where env service DNS never resolves. Run the work inside the env namespace (KubernetesManifest → `Job`) instead of exposing private services. See [references/runners.md](references/runners.md) |
+| Setup done in `deploy` is gone after env stop/start | `deploy` doesn't run on start. Repeat the idempotent setup under `start:` |
 | Sidecar port not reachable | Parent component must declare the sidecar's port in its own `ports` list |
 | File uploads rejected (413) | Add `nginx.ingress.kubernetes.io/proxy-body-size: 50m` annotation to hosts |
 
@@ -606,6 +608,7 @@ See [references/framework-checklists.md](references/framework-checklists.md) for
 - [API Reference](references/api.md) - REST API for CI/CD integrations
 - [YAML Schema](references/yaml-schema.md) - bunnyshell.yaml configuration reference
 - [Component Types](references/components.md) - Helm, Kubernetes, Terraform, Docker Compose, etc.
+- [Runners](references/runners.md) - Where/how `deploy`/`start`/`stop`/`destroy` scripts run: jobs cluster, networking, kubeconfig, shell semantics, exportVariables
 - [Variables & Interpolation](references/variables.md) - Secrets, scopes, Twig filters
 - [Template Update Playbook](references/template-update-playbook.md) - Process for updating templates
 - [Image Versions](references/image-versions.md) - Recommended Docker image versions
