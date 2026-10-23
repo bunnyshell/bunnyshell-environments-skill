@@ -15,7 +15,8 @@ scripts: `GenericComponent`, `Terraform`, `Helm`, `KubernetesManifest`.
 - To work with a private in-environment service, run the work **inside the environment's
   namespace** (see [Networking](#networking)) instead of exposing the service publicly.
 - `Helm` and `KubernetesManifest` runners get a **kubeconfig for the environment's cluster**
-  (`KUBECONFIG` is set), so `kubectl`/`helm` work against it. `GenericComponent` and
+  (`KUBECONFIG` is set), so `kubectl`/`helm` work against it, provided the runner can reach that
+  cluster's API endpoint (a private-only API endpoint is unreachable from the managed runner). `GenericComponent` and
   `Terraform` runners do **not**.
 - `deploy` re-runs on **every** environment deploy. On environment **start/stop** only the
   `start`/`stop` scripts run, and only if defined. Anything `deploy` set up inside a workload
@@ -38,7 +39,7 @@ Per run, Bunnyshell creates:
 - Namespace `neo-runner-job-<orgUnique>-<jobId>`, created fresh for the run and garbage-collected
   a few hours later.
 - A bare Pod `deployment-runner` (`restartPolicy: Never`, no service-account token):
-  - init container `context-builder`: clones the git repo and stages scripts + helpers
+  - init container `context-builder`: clones the git repo (when `gitRepo` is set) and stages scripts + helpers
   - container `runner`: **your `runnerImage`** (`imagePullPolicy: Always`) running the steps
   - sidecar `monitor`: streams logs, enforces the timeout, reports results/exported variables
 
@@ -52,7 +53,7 @@ Per run, Bunnyshell creates:
 | Public internet / cloud APIs (AWS, GCP, Azure, registries) | Yes | directly |
 | An env component via its public ingress host | Yes | `https://{{ components.<name>.ingress.hosts[0].hostname }}` (component must declare `hosts:`) |
 | An env component by service DNS / cluster IP | **No** | different cluster + private egress blocked |
-| Env cluster's Kubernetes API (Helm / KubernetesManifest) | Yes | injected `KUBECONFIG` (`kubectl apply`/`exec`/`wait`) |
+| Env cluster's Kubernetes API (Helm / KubernetesManifest) | Yes, if the API endpoint is public | injected `KUBECONFIG` (`kubectl apply`/`exec`/`wait`) |
 | Env cluster's Kubernetes API (GenericComponent / Terraform) | No kubeconfig provided | prefer a KubernetesManifest/Helm component instead (see below) |
 
 **Self-hosted runner:** Bunnyshell applies no egress policies; what is reachable depends on the
@@ -80,7 +81,7 @@ until the runner timeout. If you must, background it, wait for readiness, and `k
 
 | Path / variable | What |
 |---|---|
-| `/bns/context` | Working directory; the `gitRepo` checkout at the deployed commit (**whole repo**; `.git` is removed, so `git` commands do not work) |
+| `/bns/context` | Working directory (empty without `gitRepo`); the `gitRepo` checkout at the deployed commit (**whole repo**; `.git` is removed, so `git` commands do not work) |
 | `gitApplicationPath` | Not used by the runner (it only scopes change detection for auto-update). `cd` into subfolders yourself |
 | `/bns/helpers/helm/bns_post_renderer` | Helm post-renderer (adds Bunnyshell labels + image pull secrets; needs `kubectl` in the image) |
 | `/bns/helpers/kubernetes/bns_kustomize_init` | Kustomize label init (needs `kustomize`) |
@@ -152,8 +153,8 @@ on the environment's network.
 
 Step output streams live into the pipeline job logs (`bns pipeline logs --id <PIPELINE_ID>`,
 or the job in the UI), and the full log is stored after the run ("runner job results").
-The runner namespace is short-lived, so `kubectl` on the environment's cluster will **not** find
-the runner pod.
+The runner namespace is short-lived and, with the managed runner, on another cluster, so `kubectl`
+on the environment's cluster will **not** find the runner pod.
 
 ## Example: configure a private emulator (Azurite CORS) from inside the environment
 
@@ -188,7 +189,8 @@ starting up.
                 image: mcr.microsoft.com/azure-cli:2.67.0
                 env:
                   - name: CS
-                    # Azurite's documented local-dev account; only reachable inside the namespace
+                    # Azurite's documented local-dev account: fine for a non-public emulator, but namespaces
+                    # are not a network boundary; on shared clusters add a NetworkPolicy or custom keys
                     value: 'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;'
                 command: ['sh', '-ec']
                 args:

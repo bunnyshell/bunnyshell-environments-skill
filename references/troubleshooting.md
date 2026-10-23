@@ -49,7 +49,8 @@ The script runs in a runner Pod outside the environment's namespace. With the de
 ### `kubectl` in a GenericComponent says "connection refused localhost:8080" / no context
 GenericComponent and Terraform runners get no kubeconfig. Use a KubernetesManifest/Helm
 component, which gets one for the env cluster. If you really must pass your own credentials,
-use a least-privilege, encrypted (`SECRET[...]`) value and never print it in step output.
+use a least-privilege credential stored pre-encrypted (`ENCRYPTED[...]` from `bns secrets encrypt`,
+never plaintext in a committed file) and never print it in step output.
 
 ### `parameter not set` / `unbound variable` errors, or a multi-line step "succeeds" despite an earlier failure
 Steps are sourced in one `/bin/sh` with `set -u` and without `set -e`: unset vars are fatal,
