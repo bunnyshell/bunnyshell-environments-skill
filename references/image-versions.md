@@ -33,7 +33,7 @@ Last verified: 2026-02-14
 |---|---|---|
 | Terraform | `hashicorp/terraform:1.9` | Latest 1.x line |
 | Helm/kubectl | `dtzar/helm-kubectl:3.16` | Latest Helm 3 |
-| Kubernetes tools | `alpine/k8s:1.31.0` | Match current K8s stable. alpine/k8s publishes full versions only (no `1.31` tag) |
+| Kubernetes tools | `alpine/k8s:<major.minor.patch>` matching the target cluster (examples in these docs use `1.31.0`) | Keep `kubectl` within ±1 minor of the cluster (version-skew policy; check `kubectl version`). alpine/k8s publishes full versions only (e.g. `1.31.0`, no `1.31` tag) |
 
 ## Email Testing
 

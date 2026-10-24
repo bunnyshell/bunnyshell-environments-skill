@@ -19,7 +19,8 @@ Manage cloud environments using the Bunnyshell platform via the `bns` CLI.
 ```bash
 # Load the token from a secret store or a chmod 600 file; never type the literal token
 # into a command (shell history, `ps`) or echo it into agent/tool output
-export BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/token)"
+BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/token)"
+[ -n "$BUNNYSHELL_TOKEN" ] && export BUNNYSHELL_TOKEN || echo "token file missing or empty" >&2
 bns environments list
 ```
 
@@ -52,12 +53,13 @@ A PAT can carry the same permissions as its creator or fewer — never more. An 
 **Used exactly like the account-wide token** — no different header or flag:
 
 ```bash
-export BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/pat)"
+BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/pat)"
+[ -n "$BUNNYSHELL_TOKEN" ] && export BUNNYSHELL_TOKEN || echo "PAT file missing or empty" >&2
 bns environments list
-
-# or per-command (from a variable, never a literal token)
-bns environments list --token "$BUNNYSHELL_PAT"
 ```
+
+Avoid passing any token as `--token <value>` on a command line: it is visible in `ps` and
+shell history even when expanded from a variable.
 
 **Why this matters:** an account-wide token can see *every* organization its user belongs to, so a misloaded token operates successfully against the **wrong organization's** environments. The failure mode is not an auth error — it is commands quietly succeeding against the wrong client. Scoping a PAT to one organization makes that mistake impossible rather than merely detectable after the fact.
 
@@ -316,9 +318,9 @@ bns remote-development down
 ### 7. Variables & Secrets
 
 ```bash
-# Import variables
-bns variables import --vars-file=/path/to/vars.env
-bns variables import --secrets-file=/path/to/secrets.env
+# Import variables (always pass --environment explicitly)
+bns variables import --environment <ENV_ID> --vars-file=/path/to/vars.env
+bns variables import --environment <ENV_ID> --secrets-file=/path/to/secrets.env
 
 # Encrypt a secret: pipe it via stdin from a variable (preferred). A positional argument
 # (`bns secrets encrypt "value"`) works too, but puts the plaintext in argv and shell history.
@@ -327,9 +329,8 @@ printf '%s' "$DB_PASSWORD" | bns secrets encrypt --organization <ORG_ID>
 # causing subtle auth failures (e.g., password becomes "secret\n" not "secret").
 # `echo -n` is not portable; use printf '%s'.
 
-# Decrypt a secret: only when the user explicitly asks for it. Agents/CI must not decrypt
-# secrets or print plaintext into logs, chat, or files.
-bns secrets decrypt "ENCRYPTED[...]" --organization <ORG_ID>
+# Decrypting (`bns secrets decrypt ...`) prints plaintext: agents/CI must not run it.
+# If the user needs a value, tell them to run it themselves in a private terminal.
 
 # Encrypt entire definition file
 bns secrets encrypt-definition --file bunnyshell.yaml --organization <ORG_ID>

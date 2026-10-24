@@ -54,7 +54,7 @@ components:
       - hostname: string  # Must include {{ env.base_domain }} or custom domain
         path: /
         servicePort: 8080
-        public: false     # true = bypass security.access.allowedIps for this host (opens it to 0.0.0.0/0)
+        public: false     # true = bypass security.access.allowedIps for this host (opens it to 0.0.0.0/0 and ::/0)
         externalAddress: string    # CNAME target
         selfManagedDns: false      # Required: true when using custom domains
         displayPaths: []           # Override displayed URLs

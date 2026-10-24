@@ -118,9 +118,13 @@ When templates need different security or config between the committed version a
    so it cannot come from a template variable; it must be a literal IP/CIDR)
 2. At deploy time, write the real allowlist (an explicit, minimal CIDR list) into a temp copy:
    ```bash
-   sed 's|127.0.0.1/32|<YOUR_IP>/32|' bunnyshell.yaml > /tmp/deploy.yaml
-   grep -n -A3 'allowedIps' /tmp/deploy.yaml   # verify before applying
-   bns environments update-configuration --id <ENV_ID> --from-path /tmp/deploy.yaml --deploy
+   # the definition may hold SECRET["..."] plaintext: private temp file, removed on exit
+   umask 077
+   DEPLOY_YAML="$(mktemp)" || exit 1
+   trap 'rm -f "$DEPLOY_YAML"' EXIT
+   sed 's|127.0.0.1/32|<YOUR_IP>/32|' bunnyshell.yaml > "$DEPLOY_YAML"
+   grep -n -A3 'allowedIps' "$DEPLOY_YAML"   # verify before applying
+   bns environments update-configuration --id <ENV_ID> --from-path "$DEPLOY_YAML" --deploy
    ```
 3. This keeps templates reusable while every deployment starts restricted. Hosts that must be
    public need an explicit `public: true`

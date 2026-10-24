@@ -16,11 +16,11 @@
 ## Configuration & Profiles
 
 ```bash
-# Add profile (interactive: omit --token to be prompted; scripted: pass it from a variable,
-# never a literal token)
+# Add profile (interactive terminal only). Omit --token: the CLI prompts for it, keeping it
+# out of argv/`ps` and shell history. In scripts/agents don't create profiles; export
+# BUNNYSHELL_TOKEN instead.
 bns configure profiles add \
   --name <NAME> \
-  --token "$BUNNYSHELL_TOKEN" \
   --default \
   --organization <ORG_ID> \
   --project <PROJECT_ID> \
@@ -186,9 +186,10 @@ bns variables edit --id <VAR_ID> --secret              # Mark as secret
 bns variables delete --id <VAR_ID>
 
 # Import from file
-bns variables import --vars-file=/path/to/vars.env
-bns variables import --secrets-file=/path/to/secrets.env
-bns variables import --vars-file=vars.env --secrets-file=secrets.env --ignore-duplicates
+# Always pass --environment explicitly: without it a stale profile context can target the wrong env
+bns variables import --environment <ENV_ID> --vars-file=/path/to/vars.env
+bns variables import --environment <ENV_ID> --secrets-file=/path/to/secrets.env
+bns variables import --environment <ENV_ID> --vars-file=vars.env --secrets-file=secrets.env --ignore-duplicates
 ```
 
 **Note:** Use `bns variables edit` (not `update`) to modify existing variables.
@@ -217,12 +218,12 @@ bns secrets encrypt "my password" --organization <ORG_ID>     # works, but expos
 # Encrypt definition files
 bns secrets encrypt-definition --file bunnyshell.yaml --organization <ORG_ID>
 
-# Decrypt: only when the user explicitly asks. The output is plaintext; do not print it into
-# agent/CI logs or write it to tracked files
-bns secrets decrypt "ENCRYPTED[...]" --organization <ORG_ID>
-bns secrets decrypt-definition --file bunnyshell.yaml --organization <ORG_ID>
-bns secrets decrypt-definition --file bunnyshell.yaml --resolved --organization <ORG_ID>
 ```
+
+**Decrypting** (`bns secrets decrypt`, `bns secrets decrypt-definition [--resolved]`) prints
+plaintext to stdout. Agents and CI must **not** run these: anything they run is captured in
+tool output/logs. If the user needs a value decrypted, tell them to run the command themselves
+in a private local terminal.
 
 ## Logs (Runtime / Container)
 

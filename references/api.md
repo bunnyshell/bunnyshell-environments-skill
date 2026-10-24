@@ -225,15 +225,20 @@ curl -X POST "https://api.environments.bunnyshell.com/v1/environments/$ENV_ID/de
 ### Poll for Deploy Completion
 
 ```bash
-while true; do
-  STATUS=$(curl -s -X GET "https://api.environments.bunnyshell.com/v1/environments/$ENV_ID" \
-    -H "Authorization: Bearer $TOKEN" | jq -r '.operationStatus')
-  
+DEADLINE=$(( $(date +%s) + 1800 ))   # give up after 30 minutes
+while :; do
+  STATUS=$(curl -fsS "https://api.environments.bunnyshell.com/v1/environments/$ENV_ID" \
+    -H "Authorization: Bearer $TOKEN" | jq -er '.operationStatus') \
+    || { echo "API request failed" >&2; exit 1; }
+
   case "$STATUS" in
-    running)  echo "Deploy complete"; break ;;
-    *failed*) echo "Deploy failed"; exit 1 ;;
+    running)                 echo "Deploy complete"; break ;;
+    *failed*|aborted|*abort*) echo "Deploy ended: $STATUS" >&2; exit 1 ;;
+    deploying|queued|*ing)   ;;   # still in progress
+    *)                       echo "Unexpected status: $STATUS" >&2; exit 1 ;;
   esac
-  
+
+  [ "$(date +%s)" -lt "$DEADLINE" ] || { echo "Timed out (last status: $STATUS)" >&2; exit 1; }
   sleep 10
 done
 ```

@@ -27,7 +27,9 @@ Claude autonomously decides when to use this skill based on your environment man
 Configure the CLI:
 
 ```bash
-export BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/token)"   # recommended, works for both token types; keep the literal token out of shell history
+# recommended, works for both token types; keeps the literal token out of shell history
+BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/token)"
+[ -n "$BUNNYSHELL_TOKEN" ] && export BUNNYSHELL_TOKEN || echo "token file missing or empty" >&2
 
 # or a persistent profile (interactive terminals only; prompts for the token)
 bns configure profiles add --name default --default
