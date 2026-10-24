@@ -16,10 +16,11 @@
 ## Configuration & Profiles
 
 ```bash
-# Add profile
+# Add profile (interactive terminal only). Omit --token: the CLI prompts for it, keeping it
+# out of argv/`ps` and shell history. In scripts/agents don't create profiles; export
+# BUNNYSHELL_TOKEN instead.
 bns configure profiles add \
   --name <NAME> \
-  --token <TOKEN> \
   --default \
   --organization <ORG_ID> \
   --project <PROJECT_ID> \
@@ -78,14 +79,15 @@ bns environments create \
 bns environments clone --id <ENV_ID> --name "Cloned Env"
 
 # Lifecycle
-bns environments deploy --id <ENV_ID> --wait
-bns environments stop --id <ENV_ID> --wait
-bns environments start --id <ENV_ID> --wait
+# deploy/stop/start/delete wait for the pipeline by default; add --no-wait to return immediately
+bns environments deploy --id <ENV_ID>
+bns environments stop --id <ENV_ID>
+bns environments start --id <ENV_ID>
 bns environment abort --id <ENV_ID>            # Abort running action (v0.26+)
-bns environments delete --id <ENV_ID> --force
+bns environments delete --id <ENV_ID>          # Irreversible; confirm the exact env first (no --force flag)
 
 # Configuration (export/import)
-bns environments definition --id <ENV_ID> > bunnyshell.yaml
+bns environments definition --id <ENV_ID> -o raw > bunnyshell.yaml
 bns environments update-configuration --id <ENV_ID> --from-path bunnyshell.yaml
 
 # Settings
@@ -116,7 +118,7 @@ bns components port-forward --id <COMPONENT_ID> 8080:80
 **Note:** `bns components redeploy`, `delete`, `logs`, and `exec` do not exist. Use:
 - For redeployment: `bns environments deploy` or redeploy via web UI
 - For logs: `bns logs --component <COMPONENT_ID>` (top-level command)
-- For exec: `bns ssh --component <COMPONENT_ID> --shell "command"` or `kubectl exec`
+- For exec: `bns exec <COMPONENT_ID> -- <command>` (top-level command; see SKILL.md), or `bns ssh --component <COMPONENT_ID>` for an interactive shell
 
 ## Pipelines
 
@@ -178,15 +180,16 @@ bns k8s-clusters show --id <CLUSTER_ID>
 # Environment variables
 bns variables list --environment <ENV_ID>
 bns variables show --id <VAR_ID>
-bns variables create --environment <ENV_ID> --name KEY --value VALUE
+bns variables create --environment <ENV_ID> --name KEY --value VALUE   # non-secret values; for secrets prefer import --secrets-file (chmod 600, not in git)
 bns variables edit --id <VAR_ID> --value NEW_VALUE
 bns variables edit --id <VAR_ID> --secret              # Mark as secret
 bns variables delete --id <VAR_ID>
 
 # Import from file
-bns variables import --var-file=/path/to/vars.env
-bns variables import --secret-file=/path/to/secrets.env
-bns variables import --var-file=vars.env --secret-file=secrets.env --ignore-duplicates
+# Always pass --environment explicitly: without it a stale profile context can target the wrong env
+bns variables import --environment <ENV_ID> --vars-file=/path/to/vars.env
+bns variables import --environment <ENV_ID> --secrets-file=/path/to/secrets.env
+bns variables import --environment <ENV_ID> --vars-file=vars.env --secrets-file=secrets.env --ignore-duplicates
 ```
 
 **Note:** Use `bns variables edit` (not `update`) to modify existing variables.
@@ -206,16 +209,21 @@ bns project-variables delete --id <VAR_ID>
 ## Secrets
 
 ```bash
-# Encrypt/decrypt standalone values
-bns secrets encrypt "my password" --organization <ORG_ID>
-cat mysecret.txt | bns secrets encrypt --organization <ORG_ID>
-bns secrets decrypt "ENCRYPTED[...]" --organization <ORG_ID>
+# Encrypt standalone values: via stdin, so the plaintext stays out of argv/shell history
+# (stdin is read verbatim, so printf '%s' to avoid a trailing newline)
+printf '%s' "$MY_SECRET" | bns secrets encrypt --organization <ORG_ID>
+bns secrets encrypt --organization <ORG_ID> < mysecret.txt    # file without trailing newline
+bns secrets encrypt "my password" --organization <ORG_ID>     # works, but exposes the value in argv/history
 
-# Encrypt/decrypt definition files
+# Encrypt definition files
 bns secrets encrypt-definition --file bunnyshell.yaml --organization <ORG_ID>
-bns secrets decrypt-definition --file bunnyshell.yaml --organization <ORG_ID>
-bns secrets decrypt-definition --file bunnyshell.yaml --resolved --organization <ORG_ID>
+
 ```
+
+**Decrypting** (`bns secrets decrypt`, `bns secrets decrypt-definition [--resolved]`) prints
+plaintext to stdout. Agents and CI must **not** run these: anything they run is captured in
+tool output/logs. If the user needs a value decrypted, tell them to run the command themselves
+in a private local terminal.
 
 ## Logs (Runtime / Container)
 

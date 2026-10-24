@@ -59,7 +59,7 @@ Pre-deployment checklists for common frameworks on Bunnyshell. Check these befor
 
 - [ ] Database component uses a persistent volume — password changes require volume wipe (see troubleshooting.md)
 - [ ] Secrets encrypted with `bns secrets encrypt` go directly in YAML as `ENCRYPTED[...]` — do NOT wrap in `SECRET[]`
-- [ ] When piping secrets via stdin: use `echo -n` to avoid trailing newline
+- [ ] When piping secrets via stdin: use `printf '%s' "$VAR"` (not `echo`/`echo -n`) to avoid a trailing newline
 - [ ] For multi-container pods (e.g., PHP-FPM + Nginx): always use `bns exec <ID> -c <CONTAINER>` to avoid interactive hang
 - [ ] Verify the app binds to `0.0.0.0` (not `127.0.0.1` or `localhost`)
 - [ ] Check that exposed ports in `bunnyshell.yaml` match what the app actually listens on

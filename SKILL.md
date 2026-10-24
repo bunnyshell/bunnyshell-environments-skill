@@ -17,13 +17,21 @@ Manage cloud environments using the Bunnyshell platform via the `bns` CLI.
 
 **Authenticate via environment variable (recommended):**
 ```bash
-export BUNNYSHELL_TOKEN=YOUR_TOKEN
-bns environments list
+# Load the token from a secret store or a chmod 600 file; never type the literal token
+# into a command (shell history, `ps`) or echo it into agent/tool output
+BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/token 2>/dev/null)"
+if [ -n "$BUNNYSHELL_TOKEN" ]; then
+  export BUNNYSHELL_TOKEN
+  bns environments list
+else
+  unset BUNNYSHELL_TOKEN; echo "token file missing or empty" >&2
+fi
 ```
 
 **Alternative — persistent profile (interactive terminal only):**
 ```bash
-bns configure profiles add --name default --token YOUR_TOKEN --default
+# Omit --token: the CLI prompts for it, keeping it out of shell history
+bns configure profiles add --name default --default
 ```
 
 **Warning:** `bns configure profiles add` prompts interactively and will hang in non-interactive/scripting contexts. Prefer `export BUNNYSHELL_TOKEN` when automating.
@@ -49,12 +57,17 @@ A PAT can carry the same permissions as its creator or fewer — never more. An 
 **Used exactly like the account-wide token** — no different header or flag:
 
 ```bash
-export BUNNYSHELL_TOKEN=YOUR_PAT
-bns environments list
-
-# or per-command
-bns environments list --token YOUR_PAT
+BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/pat 2>/dev/null)"
+if [ -n "$BUNNYSHELL_TOKEN" ]; then
+  export BUNNYSHELL_TOKEN
+  bns environments list
+else
+  unset BUNNYSHELL_TOKEN; echo "PAT file missing or empty" >&2
+fi
 ```
+
+Avoid passing any token as `--token <value>` on a command line: it is visible in `ps` and
+shell history even when expanded from a variable.
 
 **Why this matters:** an account-wide token can see *every* organization its user belongs to, so a misloaded token operates successfully against the **wrong organization's** environments. The failure mode is not an auth error — it is commands quietly succeeding against the wrong client. Scoping a PAT to one organization makes that mistake impossible rather than merely detectable after the fact.
 
@@ -83,8 +96,8 @@ bns environments create \
   --project <PROJECT_ID> \
   --k8s <CLUSTER_ID>
 
-# Deploy environment (wait for completion)
-bns environments deploy --id <ENV_ID> --wait
+# Deploy environment (waits for the pipeline to finish by default; there is no --wait flag)
+bns environments deploy --id <ENV_ID>
 
 # Deploy environment (non-blocking)
 # Note: --output json is NOT supported with deploy/stop/start commands
@@ -92,10 +105,10 @@ bns environments deploy --id <ENV_ID> --wait
 bns environments deploy --id <ENV_ID> --no-wait
 
 # Stop environment (scale down, preserve data)
-bns environments stop --id <ENV_ID> --wait
+bns environments stop --id <ENV_ID>
 
 # Start environment (resume from stopped)
-bns environments start --id <ENV_ID> --wait
+bns environments start --id <ENV_ID>
 
 # Abort a running action (deploy, start, stop, etc.) (v0.26+)
 bns environment abort --id <ENV_ID>
@@ -107,7 +120,7 @@ bns environments delete --id <ENV_ID>
 bns environments clone --id <ENV_ID> --name "Cloned Env"
 
 # Export configuration (get current YAML definition)
-bns environments definition --id <ENV_ID> > bunnyshell.yaml
+bns environments definition --id <ENV_ID> -o raw > bunnyshell.yaml
 
 # Update configuration from local file
 bns environments update-configuration --id <ENV_ID> --from-path bunnyshell.yaml
@@ -313,20 +326,19 @@ bns remote-development down
 ### 7. Variables & Secrets
 
 ```bash
-# Import variables
-bns variables import --var-file=/path/to/vars.env
-bns variables import --secret-file=/path/to/secrets.env
+# Import variables (always pass --environment explicitly)
+bns variables import --environment <ENV_ID> --vars-file=/path/to/vars.env
+bns variables import --environment <ENV_ID> --secrets-file=/path/to/secrets.env
 
-# Encrypt a secret (positional argument — preferred)
-bns secrets encrypt "my-secret" --organization <ORG_ID>
+# Encrypt a secret: pipe it via stdin from a variable (preferred). A positional argument
+# (`bns secrets encrypt "value"`) works too, but puts the plaintext in argv and shell history.
+printf '%s' "$DB_PASSWORD" | bns secrets encrypt --organization <ORG_ID>
+# WARNING: stdin is read verbatim. `echo "$VAR" |` adds a newline to the value,
+# causing subtle auth failures (e.g., password becomes "secret\n" not "secret").
+# `echo -n` is not portable; use printf '%s'.
 
-# Encrypt via stdin (use echo -n to avoid trailing newline!)
-echo -n "my-secret-value" | bns secrets encrypt --organization <ORG_ID>
-# WARNING: `echo` (without -n) adds a newline to the value,
-# causing subtle auth failures (e.g., password becomes "secret\n" not "secret")
-
-# Decrypt a secret
-bns secrets decrypt "ENCRYPTED[...]" --organization <ORG_ID>
+# Decrypting (`bns secrets decrypt ...`) prints plaintext: agents/CI must not run it.
+# If the user needs a value, tell them to run it themselves in a private terminal.
 
 # Encrypt entire definition file
 bns secrets encrypt-definition --file bunnyshell.yaml --organization <ORG_ID>
@@ -464,7 +476,7 @@ Field names differ across resource types. Key fields to know:
 | Resource | Key Fields |
 |----------|-----------|
 | **Environments** | `id`, `name`, `operationStatus` (not `status`), `namespace`, `kubernetesIntegration` |
-| **Components** | `id`, `name`, `operationStatus`, `publicURLs` (not `endpoints`) |
+| **Components** | `id`, `name`, `operationStatus`, `clusterStatus`; `publicURLs` (not `endpoints`) only in `components show`, not in `components list` items |
 | **K8s Integrations** | `id`, `clusterName` (not `name`), `cloudProvider`, `status` |
 | **Projects** | `id`, `name`, `organization` |
 | **Pipelines** | `id`, `status`, `description` |
@@ -489,7 +501,7 @@ bns environments clone --id <SOURCE_ENV_ID> --name "new-environment"
 # Note the new environment ID from the output
 
 # 2. Export the new environment's configuration
-bns environments definition --id <NEW_ENV_ID> > new-env.yaml
+bns environments definition --id <NEW_ENV_ID> -o raw > new-env.yaml
 
 # 3. Edit new-env.yaml to customize:
 #    - Update environment variables
@@ -522,10 +534,9 @@ bns k8s list --output json | jq '._embedded.item[] | {id, clusterName, status}'
 # 3. Get the organization ID (needed for encrypting secrets)
 bns projects show --id <PROJECT_ID> --output json | jq -r '.organization'
 
-# 4. Encrypt any secrets for bunnyshell.yaml
-bns secrets encrypt "my-secret-value" --organization <ORG_ID>
+# 4. Encrypt any secrets for bunnyshell.yaml (value comes from a variable, not argv)
+printf '%s' "$MY_SECRET" | bns secrets encrypt --organization <ORG_ID>
 # Returns: ENCRYPTED[...] — use this DIRECTLY in bunnyshell.yaml (do NOT wrap in SECRET[])
-# For stdin piping: echo -n "value" | bns secrets encrypt --organization <ORG_ID>
 
 # 5. Create the environment from a local bunnyshell.yaml
 bns environments create \
@@ -542,9 +553,14 @@ bns environments deploy --id <ENV_ID> --no-wait
 bns pipeline list --environment <ENV_ID>
 bns pipeline monitor --id <PIPELINE_ID>
 
-# 8. Get the public URL
-bns components list --environment <ENV_ID> --output json | \
-  jq -r '._embedded.item[] | "\(.name): \(.publicURLs[])"'
+# 8. Get the public URLs (list items have no publicURLs; show each component)
+if IDS=$(bns components list --environment <ENV_ID> --output json | jq -r '._embedded.item[]?.id'); then
+  for id in $IDS; do
+    bns components show --id "$id" --output json | jq -r '"\(.name): \((.publicURLs // []) | join(" "))"'
+  done
+else
+  echo "could not list components" >&2
+fi
 ```
 
 **Shortcut — update config and deploy in one step:**

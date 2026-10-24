@@ -121,7 +121,7 @@ own. Files created in one `deploy:` step persist for later steps.
 ```yaml
 - kind: KubernetesManifest
   name: my-resources
-  runnerImage: 'alpine/k8s:1.29.2'
+  runnerImage: 'alpine/k8s:1.31.0'
   deploy:
     - |
       cat <<'EOF' > manifest.yml
@@ -140,11 +140,23 @@ own. Files created in one `deploy:` step persist for later steps.
 **Targeting another namespace:** set `namespace:` in the manifest itself and do **not** use
 `bns_kustomize_init`, which pins resources to the environment's own namespace.
 
-**Adopting objects another tool created:** use
-`kubectl apply --server-side --force-conflicts`. A client-side apply has no
+**Adopting objects another tool created:** a client-side apply has no
 `last-applied-configuration` to diff against when the object was created by a server-side
 applier (Helm, kluctl, another operator), so fields removed from your manifest survive
-silently and keep taking effect.
+silently and keep taking effect. Use server-side apply instead, but treat `--force-conflicts`
+as a last resort: it takes ownership of every conflicting field, including ones an operator or
+Helm still manages (which then get overwritten, or fought over on every reconcile). Before
+putting `--force-conflicts` in a deploy step, keep the manifest limited to the fields you mean
+to own and preview against the environment's cluster:
+
+```bash
+kubectl diff --server-side -f manifest.yml                     # what would change
+kubectl apply --server-side --dry-run=server -f manifest.yml   # fails listing field-ownership conflicts
+kubectl get <kind> <name> --show-managed-fields -o yaml        # which manager owns those fields
+```
+
+Only if every conflicting field is one you intend to take over, use
+`kubectl apply --server-side --force-conflicts -f manifest.yml`.
 
 **`destroy:` deserves a decision.** The default instinct is to delete what was created, but
 for resources meant to outlive the environment — cluster-scoped config, operator CRs,
@@ -170,7 +182,7 @@ Capture state for UI:
 
 ```yaml
 deploy:
-  - 'BNS_TF_STATE_LIST=terraform show -json'
+  - 'BNS_TF_STATE_LIST=$(terraform show -json)'
 ```
 
 ## Docker Compose Key Support
@@ -234,13 +246,14 @@ rather than assuming a key took effect.
 
 ## Runner Images
 
-Recommended images for script-based components:
+Recommended images for script-based components (Helm/Kubernetes/Terraform pins are kept in
+[image-versions.md](image-versions.md#runner-images); pin versions you have tested):
 
 | Use Case | Image |
 |----------|-------|
-| Helm | `dtzar/helm-kubectl:3.8.2` |
-| Kubernetes | `alpine/k8s:1.22.15` |
-| Terraform | `hashicorp/terraform:1.5.1` |
+| Helm | `dtzar/helm-kubectl:3.16` |
+| Kubernetes | `alpine/k8s:1.31.0` |
+| Terraform | `hashicorp/terraform:1.9` |
 | AWS CLI | `amazon/aws-cli:latest` |
 | GCloud | `google/cloud-sdk:alpine` |
 | Azure | `mcr.microsoft.com/azure-cli:latest` |
@@ -254,6 +267,8 @@ Use `@self` to run scripts in the component's own built image:
 - kind: GenericComponent
   name: my-component
   runnerImage: '@self'
+  gitRepo: 'https://github.com/org/my-component.git'   # the build context comes from this repo
+  gitBranch: main
   dockerCompose:
     build:
       context: .

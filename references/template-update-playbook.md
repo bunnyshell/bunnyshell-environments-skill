@@ -79,8 +79,8 @@ mailhog is abandoned. Mailpit is the active successor and is a drop-in replaceme
 ## Verified Deploy-Test Workflow
 
 ```bash
-# Source environment variables
-source .env
+# Load environment variables (POSIX `.`; `source` is bash-only). Keep .env out of git
+. ./.env
 
 # Create environment from local config
 bns environments create \
@@ -113,14 +113,25 @@ bns environments delete --id <ENV_ID> --no-wait
 
 When templates need different security or config between the committed version and live deployments:
 
-1. Commit templates with open defaults (e.g., `allowedIps: 0.0.0.0/0`)
-2. Create a temp copy with overrides for deployment:
+1. Commit templates **fail-closed**: never default to `allowedIps: 0.0.0.0/0`. Use a placeholder
+   that matches no client, e.g. `allowedIps: ['127.0.0.1/32']` (`allowedIps` is not interpolated,
+   so it cannot come from a template variable; it must be a literal IP/CIDR)
+2. At deploy time, write the real allowlist (an explicit, minimal CIDR list) into a temp copy:
    ```bash
-   cp bunnyshell.yaml /tmp/deploy.yaml
-   sed -i 's|0.0.0.0/0|185.181.102.37/32|' /tmp/deploy.yaml
-   bns environments update-configuration --id <ENV_ID> --from-path /tmp/deploy.yaml --deploy
+   # Subshell: umask/exit stay local. The definition may hold SECRET["..."] plaintext, so use a
+   # private temp file, delete it right after, and never print its contents.
+   (
+     umask 077
+     f="$(mktemp)" || exit 1
+     trap 'rm -f "$f"' EXIT INT TERM   # subshell-local: also cleans up if interrupted
+     sed 's|127.0.0.1/32|<YOUR_IP>/32|' bunnyshell.yaml > "$f" \
+       && ! grep -q '127.0.0.1/32' "$f" && grep -q '<YOUR_IP>/32' "$f" \
+       && bns environments update-configuration --id <ENV_ID> --from-path "$f" --deploy
+     exit $?
+   )
    ```
-3. This keeps templates reusable while allowing per-deployment restrictions
+3. This keeps templates reusable while every deployment starts restricted. Hosts that must be
+   public need an explicit `public: true`
 
 ## Efficient Multi-Environment Deploy
 
@@ -161,5 +172,5 @@ This waits for completion and prints endpoints when done.
 - **ttyd not in apt**: The `ttyd` web terminal package is not in Debian bookworm repos. Install binary from GitHub releases (see [troubleshooting.md](troubleshooting.md#web-terminal-ttyd-setup))
 - **Go version mismatches**: Always check `go.mod` requirements before using `go install` in multi-stage Dockerfiles
 - **Always local build first**: Run `docker build --platform linux/amd64` locally before deploying to catch build errors early
-- **`gitRepo` must be remote**: `--from-path` reads YAML locally but the `gitRepo` field must point to an accessible remote Git repo (Bunnyshell pulls source remotely to build)
+- **`gitRepo` must be remote when set**: `--from-path` reads YAML locally, but any component that builds from source (Application/Service with `build`, `DockerImage`, `GenericComponent`) needs `gitRepo` pointing to an accessible remote Git repo (Bunnyshell pulls source remotely to build). Repository-less `KubernetesManifest` components and `Helm` charts installed from a registry need no `gitRepo`
 - **Component URLs**: Public URLs only appear in `bns components show --id <ID>`, not in list output

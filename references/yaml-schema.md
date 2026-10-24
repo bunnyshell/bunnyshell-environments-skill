@@ -54,7 +54,7 @@ components:
       - hostname: string  # Must include {{ env.base_domain }} or custom domain
         path: /
         servicePort: 8080
-        public: false     # Bypass allowedIps restriction
+        public: false     # true = bypass security.access.allowedIps for this host (opens it to 0.0.0.0/0 and ::/0)
         externalAddress: string    # CNAME target
         selfManagedDns: false      # Required: true when using custom domains
         displayPaths: []           # Override displayed URLs
@@ -276,12 +276,13 @@ upstream php {
 ```yaml
 - kind: Helm
   name: my-release
-  runnerImage: 'dtzar/helm-kubectl:3.8.2'
+  runnerImage: 'dtzar/helm-kubectl:3.16'
   gitRepo: 'https://github.com/org/charts.git'  # Or omit for registry
   gitBranch: main
-  gitApplicationPath: /charts/myapp
+  gitApplicationPath: /charts/myapp   # Not used by the runner (steps start at the repo root)
 
   deploy:
+    - 'cd charts/myapp'
     - |
       cat << EOF > values.yaml
         image: {{ components.my-image.image }}
@@ -296,35 +297,40 @@ upstream php {
     - 'helm uninstall my-release-{{ env.unique }} --namespace {{ env.k8s.namespace }}'
 
   start:
+    - 'cd charts/myapp'
     - 'helm upgrade --namespace {{ env.k8s.namespace }} --post-renderer /bns/helpers/helm/bns_post_renderer --reuse-values --set replicas=2 my-release-{{ env.unique }} .'
 
   stop:
+    - 'cd charts/myapp'
     - 'helm upgrade --namespace {{ env.k8s.namespace }} --post-renderer /bns/helpers/helm/bns_post_renderer --reuse-values --set replicas=0 my-release-{{ env.unique }} .'
 
   exportVariables:
     - SERVICE_URL
-
-  environment:
-    KUBECONFIG: /root/.kube/config
 ```
+
+Do not set `KUBECONFIG` in `environment:`. The runner always exports
+`KUBECONFIG=/bns/helpers/kubeconfig` (the environment's cluster) after loading env vars, so an
+override is silently ignored. See [runners.md](runners.md#inside-the-runner-container).
 
 ## KubernetesManifest Component
 
 ```yaml
 - kind: KubernetesManifest
   name: myapp
-  runnerImage: 'alpine/k8s:1.22.15'
+  runnerImage: 'alpine/k8s:1.31.0'
   gitRepo: 'https://github.com/org/manifests.git'
   gitBranch: main
-  gitApplicationPath: /k8s
+  gitApplicationPath: /k8s   # Not used by the runner (steps start at the repo root)
 
   deploy:
+    - 'cd k8s'
     - '/bns/helpers/kubernetes/bns_kustomize_init --namespace {{ env.k8s.namespace }}'
     - 'kustomize edit set image app={{ components.app-image.image }}'
     - 'kubectl apply -k .'
     - 'ENDPOINT=https://myapp-{{ env.base_domain }}'
 
   destroy:
+    - 'cd k8s'
     - 'kustomize create --autodetect --recursive --namespace {{ env.k8s.namespace }}'
     - 'kubectl delete -k .'
 
@@ -343,18 +349,18 @@ upstream php {
 ```yaml
 - kind: Terraform
   name: s3-bucket
-  runnerImage: 'hashicorp/terraform:1.5.1'
+  runnerImage: 'hashicorp/terraform:1.9'
   gitRepo: 'https://github.com/org/infra.git'
   gitBranch: main
-  gitApplicationPath: /terraform/s3
+  gitApplicationPath: /terraform/s3   # Not used by the runner, hence the cd below
 
   deploy:
     - 'cd terraform/s3'
     - '/bns/helpers/terraform/get_managed_backend > zz_backend_override.tf'
     - 'terraform init -input=false -no-color'
     - 'terraform apply -var "name=bucket-{{ env.unique }}" -input=false -auto-approve -no-color'
-    - 'BNS_TF_STATE_LIST=terraform show -json'
-    - 'BUCKET_NAME=terraform output --raw bucket_name'
+    - 'BNS_TF_STATE_LIST=$(terraform show -json)'
+    - 'BUCKET_NAME=$(terraform output --raw bucket_name)'
 
   destroy:
     - 'cd terraform/s3'
@@ -381,18 +387,24 @@ upstream php {
   gitBranch: main
 
   deploy:
-    - 'gcloud auth activate-service-account --key-file /tmp/key.json'
+    - &gcloud_auth |
+      KEY_FILE=$(umask 077; mktemp) && printf '%s' "$GCLOUD_KEY" > "$KEY_FILE"
+      gcloud auth activate-service-account --key-file "$KEY_FILE"
+      rc=$?
+      rm -f "$KEY_FILE"
+      [ "$rc" -eq 0 ]
     - 'gcloud run deploy fn-{{ env.unique }} --image={{ components.fn-image.image }} --region us-central1'
     - 'SERVICE_URL=$(gcloud run services describe fn-{{ env.unique }} --format "value(status.url)")'
 
   destroy:
+    - *gcloud_auth   # destroy is a separate run: authenticate again
     - 'gcloud run services delete fn-{{ env.unique }} --quiet --region us-central1'
 
   exportVariables:
     - SERVICE_URL
 
   environment:
-    GCLOUD_KEY: '{{ env.vars.GCLOUD_SA_KEY }}'
+    GCLOUD_KEY: '{{ env.vars.GCLOUD_SA_KEY }}'   # define GCLOUD_SA_KEY as a secret
 ```
 
 ## DockerImage (Build-Only)
