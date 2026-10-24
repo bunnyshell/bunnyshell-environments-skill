@@ -28,8 +28,9 @@ Configure the CLI:
 
 ```bash
 # recommended, works for both token types; keeps the literal token out of shell history
-if [ -s ~/.config/bunnyshell/token ]; then
-  export BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/token)"
+BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/token 2>/dev/null)"
+if [ -n "$BUNNYSHELL_TOKEN" ]; then
+  export BUNNYSHELL_TOKEN
 else
   unset BUNNYSHELL_TOKEN; echo "token file missing or empty" >&2
 fi

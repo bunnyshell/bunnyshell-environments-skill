@@ -123,10 +123,11 @@ When templates need different security or config between the committed version a
    (
      umask 077
      f="$(mktemp)" || exit 1
+     trap 'rm -f "$f"' EXIT INT TERM   # subshell-local: also cleans up if interrupted
      sed 's|127.0.0.1/32|<YOUR_IP>/32|' bunnyshell.yaml > "$f" \
        && ! grep -q '127.0.0.1/32' "$f" && grep -q '<YOUR_IP>/32' "$f" \
        && bns environments update-configuration --id <ENV_ID> --from-path "$f" --deploy
-     rc=$?; rm -f "$f"; exit "$rc"
+     exit $?
    )
    ```
 3. This keeps templates reusable while every deployment starts restricted. Hosts that must be

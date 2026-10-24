@@ -19,8 +19,9 @@ Manage cloud environments using the Bunnyshell platform via the `bns` CLI.
 ```bash
 # Load the token from a secret store or a chmod 600 file; never type the literal token
 # into a command (shell history, `ps`) or echo it into agent/tool output
-if [ -s ~/.config/bunnyshell/token ]; then
-  export BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/token)"
+BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/token 2>/dev/null)"
+if [ -n "$BUNNYSHELL_TOKEN" ]; then
+  export BUNNYSHELL_TOKEN
   bns environments list
 else
   unset BUNNYSHELL_TOKEN; echo "token file missing or empty" >&2
@@ -56,8 +57,9 @@ A PAT can carry the same permissions as its creator or fewer — never more. An 
 **Used exactly like the account-wide token** — no different header or flag:
 
 ```bash
-if [ -s ~/.config/bunnyshell/pat ]; then
-  export BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/pat)"
+BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/pat 2>/dev/null)"
+if [ -n "$BUNNYSHELL_TOKEN" ]; then
+  export BUNNYSHELL_TOKEN
   bns environments list
 else
   unset BUNNYSHELL_TOKEN; echo "PAT file missing or empty" >&2
@@ -552,7 +554,7 @@ bns pipeline list --environment <ENV_ID>
 bns pipeline monitor --id <PIPELINE_ID>
 
 # 8. Get the public URLs (list items have no publicURLs; show each component)
-if IDS=$(bns components list --environment <ENV_ID> --output json | jq -er '._embedded.item[].id'); then
+if IDS=$(bns components list --environment <ENV_ID> --output json | jq -r '._embedded.item[]?.id'); then
   for id in $IDS; do
     bns components show --id "$id" --output json | jq -r '"\(.name): \((.publicURLs // []) | join(" "))"'
   done
