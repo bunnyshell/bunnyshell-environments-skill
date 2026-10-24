@@ -225,22 +225,22 @@ curl -X POST "https://api.environments.bunnyshell.com/v1/environments/$ENV_ID/de
 ### Poll for Deploy Completion
 
 ```bash
-DEADLINE=$(( $(date +%s) + 1800 ))   # give up after 30 minutes
+( DEADLINE=$(( $(date +%s) + 1800 ))   # subshell: exit ends only the loop; give up after 30 min
 while :; do
-  STATUS=$(curl -fsS "https://api.environments.bunnyshell.com/v1/environments/$ENV_ID" \
+  STATUS=$(curl -fsS --max-time 30 "https://api.environments.bunnyshell.com/v1/environments/$ENV_ID" \
     -H "Authorization: Bearer $TOKEN" | jq -er '.operationStatus') \
     || { echo "API request failed" >&2; exit 1; }
 
   case "$STATUS" in
     running)                 echo "Deploy complete"; break ;;
     *failed*|aborted|*abort*) echo "Deploy ended: $STATUS" >&2; exit 1 ;;
-    deploying|queued|*ing)   ;;   # still in progress
+    *_in_progress|queued|*ing) ;;   # still in progress (e.g. deploy_in_progress)
     *)                       echo "Unexpected status: $STATUS" >&2; exit 1 ;;
   esac
 
   [ "$(date +%s)" -lt "$DEADLINE" ] || { echo "Timed out (last status: $STATUS)" >&2; exit 1; }
   sleep 10
-done
+done )
 ```
 
 ## Error Responses

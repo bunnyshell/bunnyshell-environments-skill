@@ -80,9 +80,9 @@ the PG volume. Only do this after (1) confirming the exact environment
 succeeded and is non-empty (ideally test-restore it), and (3) getting explicit confirmation from
 the user:
 ```bash
-umask 077   # the dump contains your data
-bns exec <PG_COMPONENT_ID> -c <CONTAINER_NAME> -- pg_dump -U postgres <DB> > backup.sql \
-  && [ -s backup.sql ] || { echo "backup failed, do not proceed" >&2; exit 1; }
+( umask 077   # the dump contains your data
+  bns exec <PG_COMPONENT_ID> -c <CONTAINER_NAME> -- pg_dump -U postgres <DB> > backup.sql \
+    && [ -s backup.sql ] ) && echo "backup OK" || echo "BACKUP FAILED: do not proceed" >&2
 ```
 
 **Note:** This applies to all PostgreSQL Docker images (official, Bitnami, etc.) that use a persistent volume for `/var/lib/postgresql/data`.

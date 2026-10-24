@@ -388,11 +388,10 @@ override is silently ignored. See [runners.md](runners.md#inside-the-runner-cont
 
   deploy:
     - &gcloud_auth |
-      umask 077
-      printf '%s' "$GCLOUD_KEY" > /tmp/key.json
-      gcloud auth activate-service-account --key-file /tmp/key.json
+      KEY_FILE=$(umask 077; mktemp) && printf '%s' "$GCLOUD_KEY" > "$KEY_FILE"
+      gcloud auth activate-service-account --key-file "$KEY_FILE"
       rc=$?
-      rm -f /tmp/key.json
+      rm -f "$KEY_FILE"
       [ "$rc" -eq 0 ]
     - 'gcloud run deploy fn-{{ env.unique }} --image={{ components.fn-image.image }} --region us-central1'
     - 'SERVICE_URL=$(gcloud run services describe fn-{{ env.unique }} --format "value(status.url)")'

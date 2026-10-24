@@ -19,9 +19,12 @@ Manage cloud environments using the Bunnyshell platform via the `bns` CLI.
 ```bash
 # Load the token from a secret store or a chmod 600 file; never type the literal token
 # into a command (shell history, `ps`) or echo it into agent/tool output
-BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/token)"
-[ -n "$BUNNYSHELL_TOKEN" ] && export BUNNYSHELL_TOKEN || echo "token file missing or empty" >&2
-bns environments list
+if [ -s ~/.config/bunnyshell/token ]; then
+  export BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/token)"
+  bns environments list
+else
+  unset BUNNYSHELL_TOKEN; echo "token file missing or empty" >&2
+fi
 ```
 
 **Alternative — persistent profile (interactive terminal only):**
@@ -53,9 +56,12 @@ A PAT can carry the same permissions as its creator or fewer — never more. An 
 **Used exactly like the account-wide token** — no different header or flag:
 
 ```bash
-BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/pat)"
-[ -n "$BUNNYSHELL_TOKEN" ] && export BUNNYSHELL_TOKEN || echo "PAT file missing or empty" >&2
-bns environments list
+if [ -s ~/.config/bunnyshell/pat ]; then
+  export BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/pat)"
+  bns environments list
+else
+  unset BUNNYSHELL_TOKEN; echo "PAT file missing or empty" >&2
+fi
 ```
 
 Avoid passing any token as `--token <value>` on a command line: it is visible in `ps` and
@@ -546,9 +552,13 @@ bns pipeline list --environment <ENV_ID>
 bns pipeline monitor --id <PIPELINE_ID>
 
 # 8. Get the public URLs (list items have no publicURLs; show each component)
-for id in $(bns components list --environment <ENV_ID> --output json | jq -r '._embedded.item[].id'); do
-  bns components show --id "$id" --output json | jq -r '"\(.name): \((.publicURLs // []) | join(" "))"'
-done
+if IDS=$(bns components list --environment <ENV_ID> --output json | jq -er '._embedded.item[].id'); then
+  for id in $IDS; do
+    bns components show --id "$id" --output json | jq -r '"\(.name): \((.publicURLs // []) | join(" "))"'
+  done
+else
+  echo "could not list components" >&2
+fi
 ```
 
 **Shortcut — update config and deploy in one step:**

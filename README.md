@@ -28,8 +28,11 @@ Configure the CLI:
 
 ```bash
 # recommended, works for both token types; keeps the literal token out of shell history
-BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/token)"
-[ -n "$BUNNYSHELL_TOKEN" ] && export BUNNYSHELL_TOKEN || echo "token file missing or empty" >&2
+if [ -s ~/.config/bunnyshell/token ]; then
+  export BUNNYSHELL_TOKEN="$(cat ~/.config/bunnyshell/token)"
+else
+  unset BUNNYSHELL_TOKEN; echo "token file missing or empty" >&2
+fi
 
 # or a persistent profile (interactive terminals only; prompts for the token)
 bns configure profiles add --name default --default
