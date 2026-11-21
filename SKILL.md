@@ -104,6 +104,12 @@ bns environments deploy --id <ENV_ID>
 # These commands only support stylish (default) output format
 bns environments deploy --id <ENV_ID> --no-wait
 
+# Partial deploy: only the named components (repeat --component); no other component is
+# rebuilt or restarted. --included-dependencies: none (default) | all | missing
+bns environments deploy --id <ENV_ID> --component api --component redis
+# start/stop accept --component too
+bns environments stop --id <ENV_ID> --component worker
+
 # Stop environment (scale down, preserve data)
 bns environments stop --id <ENV_ID>
 
