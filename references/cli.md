@@ -81,6 +81,8 @@ bns environments clone --id <ENV_ID> --name "Cloned Env"
 # Lifecycle
 # deploy/stop/start/delete wait for the pipeline by default; add --no-wait to return immediately
 bns environments deploy --id <ENV_ID>
+bns environments deploy --id <ENV_ID> --component <NAME> [--component <NAME2>]  # Partial: only these components
+bns environments deploy --id <ENV_ID> --component <NAME> --included-dependencies all  # none (default) | all | missing
 bns environments stop --id <ENV_ID>
 bns environments start --id <ENV_ID>
 bns environment abort --id <ENV_ID>            # Abort running action (v0.26+)
@@ -116,7 +118,7 @@ bns components port-forward --id <COMPONENT_ID> 8080:80
 ```
 
 **Note:** `bns components redeploy`, `delete`, `logs`, and `exec` do not exist. Use:
-- For redeployment: `bns environments deploy` or redeploy via web UI
+- For redeployment: `bns environments deploy --id <ENV_ID> --component <NAME>` (only that component; repeatable), or the web UI. `start`/`stop` also take `--component`
 - For logs: `bns logs --component <COMPONENT_ID>` (top-level command)
 - For exec: `bns exec <COMPONENT_ID> -- <command>` (top-level command; see SKILL.md), or `bns ssh --component <COMPONENT_ID>` for an interactive shell
 
